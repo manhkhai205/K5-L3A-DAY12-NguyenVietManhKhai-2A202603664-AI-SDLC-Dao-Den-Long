@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+echo "[AI Harness Hook] Running pre-commit verification (typecheck + unit tests)..."
+npm run typecheck && npm test
+STATUS=$?
+if [ $STATUS -ne 0 ]; then
+  echo "[AI Harness Hook] BLOCKED: Typecheck or unit tests failed. Fix errors before committing."
+  exit 1
+fi
+echo "[AI Harness Hook] PASSED: All checks green."
+exit 0

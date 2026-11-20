@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đảo Đèn Lồng — Day 12 AI SDLC</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body, html {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0E1430;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #F5F1E6;
+      }
+      #game-canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      .hud-card {
+        background: rgba(14, 20, 48, 0.85);
+        border: 1px solid #F2C14E;
+        border-radius: 12px;
+        padding: 12px 16px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        pointer-events: auto;
+      }
+      #hud-top {
+        position: fixed;
+        top: 14px;
+        left: 16px;
+        right: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        pointer-events: none;
+        z-index: 10;
+      }
+      #hud-bottom {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        pointer-events: none;
+        z-index: 10;
+      }
+      #clock-box {
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        color: #F5F1E6;
+      }
+      #clock-box.danger {
+        color: #FF5A5F;
+        animation: blink 0.6s infinite alternate;
+      }
+      @keyframes blink {
+        from { opacity: 1; }
+        to { opacity: 0.35; }
+      }
+      .mote-slots {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .mote-slot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 1.5px solid #F2C14E;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .mote-slot.filled {
+        background: #FFF6C2;
+        box-shadow: 0 0 8px #FFE58A;
+      }
+      #interact-prompt {
+        position: fixed;
+        bottom: 105px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(14, 20, 48, 0.92);
+        border: 1.5px solid #FFB347;
+        color: #FFE9B0;
+        padding: 8px 18px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 15px;
+        display: none;
+        z-index: 12;
+      }
+      button.hud-btn {
+        background: rgba(242, 193, 78, 0.18);
+        color: #F2C14E;
+        border: 1px solid #F2C14E;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.hud-btn:hover {
+        background: rgba(242, 193, 78, 0.32);
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 14, 34, 0.86);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 30;
+      }
+      .modal-box {
+        background: #0E1430;
+        border: 2px solid #F2C14E;
+        border-radius: 16px;
+        padding: 28px 36px;
+        max-width: 480px;
+        width: 90%;
+        text-align: center;
+      }
+      .modal-box h2 {
+        color: #FFB347;
+        font-size: 26px;
+        margin-bottom: 10px;
+      }
+      .modal-box p {
+        color: #F5F1E6;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 18px;
+      }
+      .modal-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Top HUD -->
+    <div id="hud-top">
+      <!-- Top Left: Flames & Night selector -->
+      <div class="hud-card">
+        <div style="font-weight: 700; color: #FFB347; margin-bottom: 4px" id="hud-night-label">
+          Đêm 1 — Đảo Bến
+        </div>
+        <div style="font-size: 15px">
+          Ngọn Lửa (HP): <strong id="stat-flames" style="color: #FF5A5F">🔥🔥🔥 (3)</strong>
+        </div>
+        <div style="font-size: 12px; color: #8FA3B8; margin-top: 4px" id="stat-status-fx">
+          Trạng thái: Bình thường
+        </div>
+        <div style="display: flex; gap: 6px; margin-top: 8px">
+          <button class="hud-btn" id="btn-night-1">Đêm 1</button>
+          <button class="hud-btn" id="btn-night-2">Đêm 2</button>
+          <button class="hud-btn" id="btn-night-3">Đêm 3</button>
+          <button class="hud-btn" id="btn-pause">Tạm dừng (Esc/P)</button>
+        </div>
+      </div>
+
+      <!-- Top Center: Clock mm:ss -->
+      <div class="hud-card" id="clock-box">05:00</div>
+
+      <!-- Top Right: Lanterns k/n, Score & Lantern Compass -->
+      <div class="hud-card" style="text-align: right; min-width: 190px">
+        <div style="font-size: 15px">
+          Đèn Lồng Lớn: <strong id="stat-lanterns" style="color: #FFB347">0 / 5</strong>
+        </div>
+        <div style="font-size: 16px; margin-top: 4px">
+          Điểm số: <strong id="stat-score" style="color: #F2C14E">0</strong>
+        </div>
+        <div style="margin-top: 6px; font-size: 13px; color: #FFE9B0">
+          La bàn đèn: <span id="compass-arrow" style="display: inline-block; font-weight: 800">▲</span>
+          <span id="compass-dist">--m</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Prompt when near unlit lantern -->
+    <div id="interact-prompt">E — Nạp ánh sáng (0/10)</div>
+
+    <!-- Bottom HUD -->
+    <div id="hud-bottom">
+      <!-- Bottom Left: Controls help -->
+      <div class="hud-card" style="font-size: 12px; line-height: 1.5; max-width: 310px">
+        <b>WASD / Mũi tên</b>: Di chuyển · <b>Space</b>: Nhảy · <b>Shift</b>: Lướt<br />
+        <b>E</b>: Nạp đom đóm vào đèn · <b>Q / F</b>: Tỏa Sáng (tốn 3 đom đóm)<br />
+        <b>Esc / P</b>: Tạm dừng · <b>R</b>: Chơi lại Đêm
+      </div>
+
+      <!-- Bottom Center: 10 Mote Slots -->
+      <div class="hud-card" style="text-align: center">
+        <div style="font-size: 13px; color: #FFE58A">
+          Đom đóm đang mang: <strong id="stat-carried">0 / 10</strong>
+        </div>
+        <div class="mote-slots" id="mote-slots-container"></div>
+      </div>
+
+      <!-- Bottom Right: Cooldown Icons (Dash & Pulse) -->
+      <div class="hud-card" style="display: flex; gap: 14px; align-items: center">
+        <div style="text-align: center">
+          <div style="font-size: 12px; color: #8FA3B8">Lướt (Shift)</div>
+          <div id="cd-dash" style="font-size: 15px; font-weight: 700; color: #FFE9B0">Sẵn sàng</div>
+        </div>
+        <div style="text-align: center">
+          <div style="font-size: 12px; color: #8FA3B8">Tỏa Sáng (Q)</div>
+          <div id="cd-pulse" style="font-size: 15px; font-weight: 700; color: #FFB347">Sẵn sàng</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause & Settings Modal -->
+    <div class="modal-overlay" id="pause-modal">
+      <div class="modal-box">
+        <h2>Tạm Dừng — Đảo Đèn Lồng</h2>
+        <p id="lore-text">
+          Ông Đăng nhắn: "Hãy gom đủ ánh sáng đom đóm để thắp lại các Đèn Lồng Lớn trước khi bình minh lên nhé Mây!"
+        </p>
+        <div style="margin-bottom: 16px; text-align: left; font-size: 13px">
+          <label style="display: block; margin-bottom: 8px">
+            Âm lượng: <input type="range" id="slider-volume" min="0" max="100" value="80" />
+          </label>
+          <label style="display: block">
+            Độ nhạy góc nhìn: <input type="range" id="slider-sens" min="1" max="10" value="5" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="hud-btn" id="btn-resume">Tiếp tục</button>
+          <button class="hud-btn" id="btn-restart-night">Chơi lại Đêm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Victory / Defeat Modal -->
+    <div class="modal-overlay" id="end-modal">
+      <div class="modal-box">
+        <h2 id="end-title">Đảo Đèn Lồng Tỏa Sáng!</h2>
+        <p id="end-desc"></p>
+        <div class="modal-actions">
+          <button class="hud-btn" id="btn-next-night">Đêm kế tiếp</button>
+          <button class="hud-btn" id="btn-play-again">Chơi lại Đêm này</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/render/main.ts"></script>
+  </body>
+</html>

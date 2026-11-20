@@ -1,0 +1,35 @@
+name: Verify & Headless Check
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'phase-*', 'v*' ]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Unit & Determinism Tests
+        run: npm test
+
+      - name: Run Headless Smoke Scenario
+        run: npm run headless -- --scenario scenarios/smoke.json
+
+      - name: Build 3D Web Bundle
+        run: npm run build

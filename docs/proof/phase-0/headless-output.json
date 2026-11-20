@@ -1,0 +1,51 @@
+{
+  "contractVersion": "cp0-ready-v1",
+  "scenarioName": "cp0-smoke-light-lantern",
+  "seed": 202603664,
+  "totalTicks": 13,
+  "status": "won",
+  "declaredAssumptions": {
+    "seed": 202603664,
+    "islandRadius": 40,
+    "tickRate": 60,
+    "playerSpeed": 8,
+    "pickupRadius": 2,
+    "lanternInteractRadius": 3,
+    "lanternRequiredFireflies": 3,
+    "lanternSafeRadius": 8,
+    "shadowHitRadius": 1.5,
+    "shadowSpeed": 3.5,
+    "maxHealth": 3
+  },
+  "finalState": {
+    "player": {
+      "id": "may",
+      "name": "Mây",
+      "position": {
+        "x": 5.2,
+        "y": 0,
+        "z": 0
+      },
+      "velocity": {
+        "x": 8,
+        "y": 0,
+        "z": 0
+      },
+      "firefliesHeld": 0,
+      "health": 3,
+      "alive": true
+    },
+    "firefliesCollected": 3,
+    "firefliesRemaining": 0,
+    "lanternsLit": 1,
+    "lanternsTotal": 1,
+    "events": [
+      "tick:1:collected:ff-1",
+      "tick:5:collected:ff-2",
+      "tick:10:collected:ff-3",
+      "tick:13:deposit:lantern-main:3",
+      "tick:13:lit:lantern-main",
+      "tick:13:victory"
+    ]
+  }
+}

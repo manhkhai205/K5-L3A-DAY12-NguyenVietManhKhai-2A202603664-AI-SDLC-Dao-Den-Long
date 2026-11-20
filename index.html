@@ -23,6 +23,10 @@
         display: block;
         width: 100vw;
         height: 100vh;
+        cursor: grab;
+      }
+      #game-canvas:active {
+        cursor: grabbing;
       }
       .hud-card {
         background: rgba(14, 20, 48, 0.85);
@@ -100,6 +104,23 @@
         display: none;
         z-index: 12;
       }
+      #offscreen-arrow {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(14, 20, 48, 0.9);
+        border: 2px solid #FFB347;
+        color: #FFB347;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 14px;
+        pointer-events: none;
+        display: none;
+        z-index: 15;
+        box-shadow: 0 0 14px rgba(255, 179, 71, 0.45);
+      }
       button.hud-btn {
         background: rgba(242, 193, 78, 0.18);
         color: #F2C14E;
@@ -111,12 +132,12 @@
         cursor: pointer;
       }
       button.hud-btn:hover {
-        background: rgba(242, 193, 78, 0.32);
+        background: rgba(242, 193, 78, 0.35);
       }
       .modal-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(10, 14, 34, 0.86);
+        background: rgba(10, 14, 34, 0.88);
         display: none;
         justify-content: center;
         align-items: center;
@@ -127,9 +148,10 @@
         border: 2px solid #F2C14E;
         border-radius: 16px;
         padding: 28px 36px;
-        max-width: 480px;
-        width: 90%;
+        max-width: 520px;
+        width: 92%;
         text-align: center;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
       }
       .modal-box h2 {
         color: #FFB347;
@@ -153,6 +175,9 @@
   <body>
     <canvas id="game-canvas"></canvas>
 
+    <!-- Off-screen nearest unlit lantern arrow indicator -->
+    <div id="offscreen-arrow">▲ L1</div>
+
     <!-- Top HUD -->
     <div id="hud-top">
       <!-- Top Left: Flames & Night selector -->
@@ -166,11 +191,12 @@
         <div style="font-size: 12px; color: #8FA3B8; margin-top: 4px" id="stat-status-fx">
           Trạng thái: Bình thường
         </div>
-        <div style="display: flex; gap: 6px; margin-top: 8px">
+        <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap">
           <button class="hud-btn" id="btn-night-1">Đêm 1</button>
           <button class="hud-btn" id="btn-night-2">Đêm 2</button>
           <button class="hud-btn" id="btn-night-3">Đêm 3</button>
-          <button class="hud-btn" id="btn-pause">Tạm dừng (Esc/P)</button>
+          <button class="hud-btn" id="btn-menu">Menu</button>
+          <button class="hud-btn" id="btn-pause">Tạm dừng (P)</button>
         </div>
       </div>
 
@@ -178,7 +204,7 @@
       <div class="hud-card" id="clock-box">05:00</div>
 
       <!-- Top Right: Lanterns k/n, Score & Lantern Compass -->
-      <div class="hud-card" style="text-align: right; min-width: 190px">
+      <div class="hud-card" style="text-align: right; min-width: 205px">
         <div style="font-size: 15px">
           Đèn Lồng Lớn: <strong id="stat-lanterns" style="color: #FFB347">0 / 5</strong>
         </div>
@@ -189,6 +215,9 @@
           La bàn đèn: <span id="compass-arrow" style="display: inline-block; font-weight: 800">▲</span>
           <span id="compass-dist">--m</span>
         </div>
+        <div style="margin-top: 4px; font-size: 11px; color: #8FA3B8" id="cam-status-hint">
+          Chuột: Click vào cảnh hoặc Kéo chuột để xoay 360°
+        </div>
       </div>
     </div>
 
@@ -198,10 +227,11 @@
     <!-- Bottom HUD -->
     <div id="hud-bottom">
       <!-- Bottom Left: Controls help -->
-      <div class="hud-card" style="font-size: 12px; line-height: 1.5; max-width: 310px">
-        <b>WASD / Mũi tên</b>: Di chuyển · <b>Space</b>: Nhảy · <b>Shift</b>: Lướt<br />
+      <div class="hud-card" style="font-size: 12px; line-height: 1.5; max-width: 340px">
+        <b>Chuột (Click khóa tâm / Kéo chuột)</b> hoặc <b>←/→</b>: Xoay hướng nhìn<br />
+        <b>WASD</b>: Di chuyển theo hướng nhìn · <b>Space</b>: Nhảy · <b>Shift</b>: Lướt<br />
         <b>E</b>: Nạp đom đóm vào đèn · <b>Q / F</b>: Tỏa Sáng (tốn 3 đom đóm)<br />
-        <b>Esc / P</b>: Tạm dừng · <b>R</b>: Chơi lại Đêm
+        <b>P</b>: Tạm dừng / Cài đặt · <b>R</b>: Chơi lại Đêm
       </div>
 
       <!-- Bottom Center: 10 Mote Slots -->
@@ -219,8 +249,25 @@
           <div id="cd-dash" style="font-size: 15px; font-weight: 700; color: #FFE9B0">Sẵn sàng</div>
         </div>
         <div style="text-align: center">
-          <div style="font-size: 12px; color: #8FA3B8">Tỏa Sáng (Q)</div>
+          <div style="font-size: 12px; color: #8FA3B8">Tỏa Sáng (Q/F)</div>
           <div id="cd-pulse" style="font-size: 15px; font-weight: 700; color: #FFB347">Sẵn sàng</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Menu & Ông Đăng Intro Modal -->
+    <div class="modal-overlay" id="intro-modal">
+      <div class="modal-box">
+        <h2 id="intro-title">Đảo Đèn Lồng</h2>
+        <p id="intro-lore">
+          Ông Đăng: "Sương đen đã nuốt mất ánh sáng của ba hòn đảo. Mây hãy gom đom đóm và thắp sáng lại các Đèn Lồng Lớn trước khi bình minh lên nhé!"
+        </p>
+        <div class="modal-actions">
+          <button class="hud-btn" id="btn-start-night" style="font-size: 15px; padding: 10px 22px">
+            Bắt đầu Đêm 1 — Đảo Bến
+          </button>
+          <button class="hud-btn" id="btn-select-n2">Chơi Đêm 2 — Đảo Cau</button>
+          <button class="hud-btn" id="btn-select-n3">Chơi Đêm 3 — Đảo Chuông</button>
         </div>
       </div>
     </div>
@@ -228,32 +275,35 @@
     <!-- Pause & Settings Modal -->
     <div class="modal-overlay" id="pause-modal">
       <div class="modal-box">
-        <h2>Tạm Dừng — Đảo Đèn Lồng</h2>
+        <h2>Tạm Dừng — Cài Đặt</h2>
         <p id="lore-text">
-          Ông Đăng nhắn: "Hãy gom đủ ánh sáng đom đóm để thắp lại các Đèn Lồng Lớn trước khi bình minh lên nhé Mây!"
+          Ông Đăng nhắn: "Click trực tiếp vào màn hình game hoặc giữ kéo chuột để xoay góc nhìn 360°, lăn con lăn chuột để zoom xa/gần!"
         </p>
         <div style="margin-bottom: 16px; text-align: left; font-size: 13px">
-          <label style="display: block; margin-bottom: 8px">
-            Âm lượng: <input type="range" id="slider-volume" min="0" max="100" value="80" />
+          <label style="display: block; margin-bottom: 10px">
+            Âm lượng (<span id="val-volume">80</span>%):
+            <input type="range" id="slider-volume" min="0" max="100" value="80" style="width: 100%" />
           </label>
           <label style="display: block">
-            Độ nhạy góc nhìn: <input type="range" id="slider-sens" min="1" max="10" value="5" />
+            Độ nhạy chuột xoay camera (<span id="val-sens">5</span>):
+            <input type="range" id="slider-sens" min="1" max="10" value="5" style="width: 100%" />
           </label>
         </div>
         <div class="modal-actions">
           <button class="hud-btn" id="btn-resume">Tiếp tục</button>
           <button class="hud-btn" id="btn-restart-night">Chơi lại Đêm</button>
+          <button class="hud-btn" id="btn-back-menu">Về Menu chính</button>
         </div>
       </div>
     </div>
 
-    <!-- Victory / Defeat Modal -->
+    <!-- Victory / Defeat / Dawn Modal -->
     <div class="modal-overlay" id="end-modal">
       <div class="modal-box">
         <h2 id="end-title">Đảo Đèn Lồng Tỏa Sáng!</h2>
         <p id="end-desc"></p>
         <div class="modal-actions">
-          <button class="hud-btn" id="btn-next-night">Đêm kế tiếp</button>
+          <button class="hud-btn" id="btn-next-night" style="font-size: 14px; padding: 8px 18px">Đêm kế tiếp</button>
           <button class="hud-btn" id="btn-play-again">Chơi lại Đêm này</button>
         </div>
       </div>

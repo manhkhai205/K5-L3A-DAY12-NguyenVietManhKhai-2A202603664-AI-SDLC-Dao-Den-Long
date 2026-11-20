@@ -66,7 +66,7 @@ export function getGroundHeight(night: 1 | 2 | 3, x: number, z: number, currentY
   const r = Math.sqrt(x * x + z * z);
   if (r > 45.0) return null;
 
-  // Check ramps (30 deg and 150 deg, radial from r=30 (Y=0) to r=24 (Y=3), width 3m => half-width 1.5m)
+  // 2 straight ramps width 3m along radius at 30° and 150°: foot at r=30 (Y=0), top at r=24 (Y=3)
   for (const deg of [30, 150]) {
     const rad = (deg * Math.PI) / 180;
     const ux = Math.cos(rad);
@@ -75,18 +75,18 @@ export function getGroundHeight(night: 1 | 2 | 3, x: number, z: number, currentY
     const perp = Math.abs(-x * uz + z * ux);
     if (proj >= 24.0 && proj <= 30.0 && perp <= 1.5) {
       const rampY = ((30.0 - proj) / 6.0) * 3.0;
-      if (currentY >= rampY - 0.5) {
+      if (currentY >= rampY - 0.65) {
         return rampY;
       }
     }
   }
 
-  // Tier 2: disk radius <= 8m at Y=6 (only if player is already at/above Y=5.5)
+  // Tier 2: disk radius <= 8m at Y=6 (vertical cliff wall: must already be near Y>=5.5)
   if (r <= 8.0 && currentY >= 5.5) {
     return 6.0;
   }
 
-  // Tier 1: annulus radius 12..24m, z > 0 at Y=3 (only if player is at/above Y=2.5)
+  // Tier 1: half-annulus radius 12..24m, z > 0 at Y=3 (must already be near Y>=2.5)
   if (r >= 12.0 && r <= 24.0 && z > 0 && currentY >= 2.5) {
     return 3.0;
   }
@@ -202,7 +202,6 @@ export function createWorld(options: {
       }
     }
   } else if (randomMotes) {
-    // Pick 20 distinct spawn points deterministically
     const indices = nightInfo.moteSpawns.map((_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
       const j = prng.int(0, i);
@@ -241,7 +240,7 @@ export function createWorld(options: {
         stateTicksLeft: s.state_ticks_left ?? 0,
         pushTicksLeft: 0,
         pushStepXZ: [0, 0],
-        wanderAngle: 0,
+        wanderAngle: Math.atan2(-s.pos[2], -s.pos[0]),
       });
     }
   }
@@ -265,7 +264,7 @@ export function createWorld(options: {
         stolen: d.stolen ?? 0,
         hasStolenOnce: (d.stolen ?? 0) > 0,
         stateTicksLeft: d.state_ticks_left ?? (d.state === 'flee' ? 240 : 0),
-        wanderAngle: 0,
+        wanderAngle: Math.atan2(-d.pos[2], -d.pos[0]),
       });
     }
   }
@@ -465,7 +464,7 @@ export function stepWorld(
     if (l.justLitTicks > 0) l.justLitTicks -= 1;
   }
 
-  // Wind schedule on Night 3 (every 30s = 1800 ticks, active for 5s = 300 ticks)
+  // Wind schedule on Night 3 (every 30s = 1800 ticks, active for 5s = 300 ticks, warning 2s = 120 ticks before)
   if (world.wind.enabled) {
     const cycle = world.simTick % 1800;
     if (cycle === 1800 - 120) {
@@ -492,7 +491,8 @@ export function stepWorld(
       p.invulnTicks = Math.round(world.tuning.invuln_s * TICK_RATE); // 90 ticks
     }
   } else {
-    // Convert camera yaw input move [x, z] to world direction
+    // Convert camera yaw input move [x, z] to world direction:
+    // Contract C: x' = x*cos(theta) + z*sin(theta), z' = -x*sin(theta) + z*cos(theta)
     let mx = Math.max(-1, Math.min(1, prevInput.move[0]));
     let mz = Math.max(-1, Math.min(1, prevInput.move[1]));
     const len = Math.sqrt(mx * mx + mz * mz);
@@ -555,11 +555,11 @@ export function stepWorld(
       p.vel[2] += 2.0 * Math.sin(wRad);
     }
 
-    // Bell tower obstacle at center of Tier 2 on Night 3 (radius 2m at (0,6,0), height 8m)
     let nextX = p.pos[0] + p.vel[0] * DT;
     let nextY = p.pos[1] + p.vel[1] * DT;
     let nextZ = p.pos[2] + p.vel[2] * DT;
 
+    // Bell tower obstacle at center of Tier 2 on Night 3 (radius 2m at (0,6,0), height 8m)
     if (world.night === 3 && nextY >= 5.5 && nextY <= 14.0) {
       const rCenter = Math.sqrt(nextX * nextX + nextZ * nextZ);
       if (rCenter < 2.0 && rCenter > 0.0001) {
@@ -572,7 +572,6 @@ export function stepWorld(
 
     // Check tier cliff blocking on Night 3 (cannot walk up vertical cliff walls)
     if (groundY !== null && groundY > p.pos[1] + 0.6 && p.grounded) {
-      // Blocked by vertical wall
       nextX = p.pos[0];
       nextZ = p.pos[2];
     } else if (groundY !== null) {
@@ -598,7 +597,6 @@ export function stepWorld(
 
     // Check Jump Pads
     if (world.night === 2 && p.grounded) {
-      // Pad 1 at (20, 0, 18) -> launches toward island B (70, 0, 0)
       if (distXZ(p.pos, [20, 0, 18]) <= 1.0) {
         const dx = 70 - p.pos[0];
         const dz = 0 - p.pos[2];
@@ -617,7 +615,6 @@ export function stepWorld(
         p.jumpPadLocked = true;
       }
     } else if (world.night === 3 && p.grounded && Math.abs(p.pos[1] - 3.0) <= 0.2) {
-      // Pad at (0, 3, 13): Y vel 12 m/s, horizontal 8 m/s toward -Z
       if (distXZ(p.pos, [0, 3, 13]) <= 1.0) {
         p.jumpPadVel = [0, -8.0];
         p.vel = [0, 12.0, -8.0];
@@ -869,6 +866,20 @@ export function stepWorld(
       if (!blockedBySafeZone) {
         s.pos = roundVec3([candX, s.pos[1], candZ]);
       }
+    } else if (s.state === 'wander') {
+      // Gentle patrol movement in wander state (1.5 m/s) while staying on island & outside safe zones
+      const wanderSpeed = 1.5;
+      const candX = s.pos[0] + Math.cos(s.wanderAngle) * wanderSpeed * DT;
+      const candZ = s.pos[2] + Math.sin(s.wanderAngle) * wanderSpeed * DT;
+      const onIsland = getGroundHeight(world.night, candX, candZ, s.pos[1]) !== null;
+      const blockedBySafeZone = world.lanterns.some(
+        (l) => l.lit && distXZ([candX, s.pos[1], candZ], l.pos) < world.tuning.safe_radius
+      );
+      if (onIsland && !blockedBySafeZone) {
+        s.pos = roundVec3([candX, s.pos[1], candZ]);
+      } else {
+        s.wanderAngle += Math.PI * 0.75;
+      }
     }
   }
 
@@ -888,6 +899,15 @@ export function stepWorld(
       const ux = (p.pos[0] - d.pos[0]) / distP;
       const uz = (p.pos[2] - d.pos[2]) / distP;
       d.pos = roundVec3([d.pos[0] + ux * 7.0 * DT, d.pos[1], d.pos[2] + uz * 7.0 * DT]);
+    } else if (d.state === 'idle') {
+      // Ticket-02: idle (glides slowly at 2 m/s)
+      const candX = d.pos[0] + Math.cos(d.wanderAngle) * 2.0 * DT;
+      const candZ = d.pos[2] + Math.sin(d.wanderAngle) * 2.0 * DT;
+      if (getGroundHeight(world.night, candX, candZ, d.pos[1]) !== null) {
+        d.pos = roundVec3([candX, d.pos[1], candZ]);
+      } else {
+        d.wanderAngle += Math.PI * 0.8;
+      }
     } else if (d.state === 'flee') {
       const dx = d.pos[0] - p.pos[0];
       const dz = d.pos[2] - p.pos[2];
@@ -927,7 +947,6 @@ export function stepWorld(
     const sortedShades = [...world.shades].sort((a, b) => a.id.localeCompare(b.id));
     for (const s of sortedShades) {
       if (s.state === 'stunned' || s.state === 'recoil' || s.state === 'spawning') continue;
-      // Shades inside a newly-lit lantern safe zone being pushed out cannot deal damage
       const insidePushZone = world.lanterns.some(
         (l) => l.lit && l.justLitTicks > 0 && distXZ(s.pos, l.pos) <= world.tuning.safe_radius
       );
@@ -1020,7 +1039,7 @@ export function stepWorld(
             stateTicksLeft: 0,
             pushTicksLeft: 0,
             pushStepXZ: [0, 0],
-            wanderAngle: 0,
+            wanderAngle: Math.atan2(-sp[2], -sp[0]),
           });
           emit('shade_spawned', { id });
         }
@@ -1044,7 +1063,7 @@ export function stepWorld(
         stolen: 0,
         hasStolenOnce: false,
         stateTicksLeft: 0,
-        wanderAngle: 0,
+        wanderAngle: Math.atan2(-sp[2], -sp[0]),
       });
     }
   }
@@ -1103,7 +1122,6 @@ export function buildSnapshot(world: SimWorld): Record<string, unknown> {
     };
   }
 
-  // Contract v1.1 Snapshot
   return {
     type: 'snapshot',
     tick: world.tick,
@@ -1237,7 +1255,6 @@ export function runContractSimulation(params: {
   const lines: string[] = [];
   const inputState = createDefaultInputState();
 
-  // Snapshot tick 0: after building scenario, before applying any input
   if (snapshotEvery > 0 && 0 % snapshotEvery === 0) {
     lines.push(JSON.stringify(buildSnapshot(world)));
   }
@@ -1253,7 +1270,6 @@ export function runContractSimulation(params: {
       lines.push(JSON.stringify(ev));
     }
 
-    // Step 12: Record snapshot if on schedule
     if (snapshotEvery > 0 && world.tick % snapshotEvery === 0) {
       lines.push(JSON.stringify(buildSnapshot(world)));
     }

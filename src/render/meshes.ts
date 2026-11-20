@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /**
  * Standard Palette from Ticket-02 & PRD-0:
@@ -11,27 +12,184 @@ import * as THREE from 'three';
  * Gold Accent / Drifter: #F2C14E / #8FA3B8
  */
 
-export function createIslandMeshForNight(night: 1 | 2 | 3): THREE.Group {
-  const group = new THREE.Group();
+const textureLoader = new THREE.TextureLoader();
+const gltfLoader = new GLTFLoader();
 
-  const grassMat = new THREE.MeshStandardMaterial({ color: 0x2f5d50, roughness: 0.85 });
-  const sandMat = new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.9 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.8 });
+let grassTex: THREE.Texture | null = null;
+let woodTex: THREE.Texture | null = null;
+let sparkTex: THREE.Texture | null = null;
+let waterTex: THREE.Texture | null = null;
 
-  // Cloud sea plane below
-  const seaGeo = new THREE.PlaneGeometry(400, 400);
-  const seaMat = new THREE.MeshBasicMaterial({
-    color: 0x12384a,
+function ensureTextures() {
+  if (typeof window === 'undefined') return;
+  if (!grassTex) {
+    grassTex = textureLoader.load('./assets/textures/grasslight.jpg');
+    grassTex.wrapS = THREE.RepeatWrapping;
+    grassTex.wrapT = THREE.RepeatWrapping;
+    grassTex.repeat.set(8, 8);
+  }
+  if (!woodTex) {
+    woodTex = textureLoader.load('./assets/textures/wood.jpg');
+    woodTex.wrapS = THREE.RepeatWrapping;
+    woodTex.wrapT = THREE.RepeatWrapping;
+    woodTex.repeat.set(3, 1);
+  }
+  if (!sparkTex) {
+    sparkTex = textureLoader.load('./assets/textures/spark1.png');
+  }
+  if (!waterTex) {
+    waterTex = textureLoader.load('./assets/textures/waternormals.jpg');
+    waterTex.wrapS = THREE.RepeatWrapping;
+    waterTex.wrapT = THREE.RepeatWrapping;
+    waterTex.repeat.set(16, 16);
+  }
+}
+
+export function createStarfieldAndWindParticles(): {
+  stars: THREE.Points;
+  windParticles: THREE.Points;
+} {
+  ensureTextures();
+
+  // Starfield sky
+  const starCount = 450;
+  const starPos = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const theta = (i * 137.5 * Math.PI) / 180;
+    const phi = Math.acos(1 - (i / starCount) * 0.75);
+    const r = 135;
+    starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    starPos[i * 3 + 1] = Math.max(8, r * Math.cos(phi));
+    starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({
+    color: 0xffe9b0,
+    size: 1.6,
+    map: sparkTex ?? undefined,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const stars = new THREE.Points(starGeo, starMat);
+
+  // Wind leaves / mist particles for Night 3 wind warning & active wind
+  const windCount = 160;
+  const windPos = new Float32Array(windCount * 3);
+  for (let i = 0; i < windCount; i++) {
+    windPos[i * 3] = ((i * 19) % 80) - 40;
+    windPos[i * 3 + 1] = ((i * 7) % 12) + 0.5;
+    windPos[i * 3 + 2] = ((i * 31) % 80) - 40;
+  }
+  const windGeo = new THREE.BufferGeometry();
+  windGeo.setAttribute('position', new THREE.BufferAttribute(windPos, 3));
+  const windMat = new THREE.PointsMaterial({
+    color: 0xf2c14e,
+    size: 0.7,
+    transparent: true,
+    opacity: 0.0,
+  });
+  const windParticles = new THREE.Points(windGeo, windMat);
+
+  return { stars, windParticles };
+}
+
+function addDecorativeTreesAndRocks(
+  group: THREE.Group,
+  night: 1 | 2 | 3,
+  grassMat: THREE.Material,
+  woodMat: THREE.Material
+) {
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x5b5f6e, roughness: 0.88 });
+
+  const treePositions: Array<[number, number, number]> =
+    night === 1
+      ? [
+          [16, 0, 16],
+          [-16, 0, 16],
+          [18, 0, -12],
+          [-18, 0, -12],
+          [0, 0, -28],
+          [28, 0, 0],
+          [-28, 0, 0],
+        ]
+      : night === 2
+        ? [
+            [-12, 0, 12],
+            [12, 0, 12],
+            [58, 0, 12],
+            [82, 0, 12],
+            [70, 0, -18],
+          ]
+        : [
+            [26, 0, 22],
+            [-26, 0, 22],
+            [0, 0, -28],
+            [28, 0, -22],
+            [-28, 0, -22],
+          ];
+
+  for (const [tx, ty, tz] of treePositions) {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 2.2, 10), woodMat);
+    trunk.position.y = 1.1;
+    tree.add(trunk);
+
+    const foliage1 = new THREE.Mesh(new THREE.ConeGeometry(1.4, 2.2, 12), grassMat);
+    foliage1.position.y = 2.6;
+    tree.add(foliage1);
+
+    const foliage2 = new THREE.Mesh(new THREE.ConeGeometry(1.05, 1.8, 12), grassMat);
+    foliage2.position.y = 3.7;
+    tree.add(foliage2);
+
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), rockMat);
+    rock.position.set(0.8, 0.3, 0.4);
+    tree.add(rock);
+
+    tree.position.set(tx, ty, tz);
+    group.add(tree);
+  }
+}
+
+export function createIslandMeshForNight(night: 1 | 2 | 3): {
+  group: THREE.Group;
+  animatedModels: THREE.Object3D[];
+} {
+  ensureTextures();
+  const group = new THREE.Group();
+  const animatedModels: THREE.Object3D[] = [];
+
+  const grassMat = new THREE.MeshStandardMaterial({
+    color: 0x2f5d50,
+    map: grassTex ?? undefined,
+    roughness: 0.85,
+  });
+  const sandMat = new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.9 });
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x6b4a2f,
+    map: woodTex ?? undefined,
+    roughness: 0.8,
+  });
+
+  // Cloud sea plane below (#12384A)
+  const seaGeo = new THREE.PlaneGeometry(450, 450);
+  const seaMat = new THREE.MeshStandardMaterial({
+    color: 0x12384a,
+    normalMap: waterTex ?? undefined,
+    roughness: 0.6,
+    metalness: 0.2,
+    transparent: true,
+    opacity: 0.82,
   });
   const sea = new THREE.Mesh(seaGeo, seaMat);
   sea.rotation.x = -Math.PI / 2;
-  sea.position.y = -10.5;
+  sea.position.y = -10.2;
   group.add(sea);
 
   if (night === 1) {
-    // Night 1: Circular island radius 40m
     const mainDisk = new THREE.Mesh(new THREE.CylinderGeometry(40, 38.5, 2.5, 64), grassMat);
     mainDisk.position.y = -1.25;
     group.add(mainDisk);
@@ -41,7 +199,6 @@ export function createIslandMeshForNight(night: 1 | 2 | 3): THREE.Group {
     rim.position.y = 0.02;
     group.add(rim);
   } else if (night === 2) {
-    // Night 2: Two circular islands radius 28m at (0,0,0) and (70,0,0) + bridge x in [26,44], z in [-2,2]
     const diskA = new THREE.Mesh(new THREE.CylinderGeometry(28, 26.8, 2.5, 48), grassMat);
     diskA.position.set(0, -1.25, 0);
     group.add(diskA);
@@ -54,7 +211,6 @@ export function createIslandMeshForNight(night: 1 | 2 | 3): THREE.Group {
     bridge.position.set(35, -0.2, 0);
     group.add(bridge);
 
-    // Jump pads at (20,0,18) and (50,0,-18)
     const padMat = new THREE.MeshBasicMaterial({ color: 0xf2c14e });
     for (const pos of [
       [20, 0.08, 18],
@@ -65,7 +221,6 @@ export function createIslandMeshForNight(night: 1 | 2 | 3): THREE.Group {
       group.add(pad);
     }
   } else {
-    // Night 3: Radius 45m, 3 tiers + bell tower
     const tier0 = new THREE.Mesh(new THREE.CylinderGeometry(45, 43.5, 2.5, 64), grassMat);
     tier0.position.set(0, -1.25, 0);
     group.add(tier0);
@@ -76,6 +231,19 @@ export function createIslandMeshForNight(night: 1 | 2 | 3): THREE.Group {
     tier1.rotation.y = -Math.PI / 2;
     tier1.position.set(0, 1.5, 0);
     group.add(tier1);
+
+    // 2 straight ramps at 30° and 150° from r=30 (Y=0) to r=24 (Y=3), width 3m
+    for (const deg of [30, 150]) {
+      const rad = (deg * Math.PI) / 180;
+      const rampLen = Math.sqrt(6 * 6 + 3 * 3);
+      const rampGeo = new THREE.BoxGeometry(rampLen, 0.3, 3.0);
+      const ramp = new THREE.Mesh(rampGeo, woodMat);
+      const midR = 27.0;
+      ramp.position.set(Math.cos(rad) * midR, 1.5, Math.sin(rad) * midR);
+      ramp.rotation.y = -rad;
+      ramp.rotation.z = Math.atan2(3.0, -6.0);
+      group.add(ramp);
+    }
 
     // Tier 2: disk radius 8m at Y=6
     const tier2 = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 6.0, 32), grassMat);
@@ -94,7 +262,47 @@ export function createIslandMeshForNight(night: 1 | 2 | 3): THREE.Group {
     group.add(pad);
   }
 
-  return group;
+  addDecorativeTreesAndRocks(group, night, grassMat, woodMat);
+
+  // Load downloaded GLB decorative models (Spirit Bird soaring over cloud sea + Ông Đăng Guardian Statue at spawn)
+  if (typeof window !== 'undefined') {
+    gltfLoader.load(
+      './assets/models/spirit_bird.glb',
+      (gltf) => {
+        const bird = gltf.scene;
+        bird.scale.setScalar(0.035);
+        bird.position.set(0, 14, 15);
+        group.add(bird);
+        animatedModels.push(bird);
+      },
+      undefined,
+      () => {}
+    );
+
+    gltfLoader.load(
+      './assets/models/guardian_figure.glb',
+      (gltf) => {
+        const statue = gltf.scene;
+        statue.scale.setScalar(0.42);
+        statue.position.set(-3.2, 0, -2.5);
+        statue.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const m = child as THREE.Mesh;
+            m.material = new THREE.MeshStandardMaterial({
+              color: 0xc9b48a,
+              roughness: 0.75,
+              metalness: 0.2,
+            });
+          }
+        });
+        group.add(statue);
+      },
+      undefined,
+      () => {}
+    );
+  }
+
+  return { group, animatedModels };
 }
 
 export function createMayCharacterMesh(): { group: THREE.Group; orbitGroup: THREE.Group } {
@@ -123,20 +331,20 @@ export function createMayCharacterMesh(): { group: THREE.Group; orbitGroup: THRE
   group.add(head);
 
   // Nón lá (Conical hat - PRD-0 Section 3: "Mây đội nón lá có treo một chiếc đèn lồng nhỏ")
-  const hatGeo = new THREE.ConeGeometry(0.65, 0.38, 24);
+  const hatGeo = new THREE.ConeGeometry(0.68, 0.4, 24);
   const hatMat = new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.7 });
   const hat = new THREE.Mesh(hatGeo, hatMat);
   hat.position.y = 1.82;
   group.add(hat);
 
   // Chiếc đèn lồng nhỏ treo ở vành nón lá
-  const smallLanternGeo = new THREE.OctahedronGeometry(0.14, 0);
+  const smallLanternGeo = new THREE.OctahedronGeometry(0.15, 0);
   const smallLanternMat = new THREE.MeshBasicMaterial({ color: 0xffb347 });
   const smallLantern = new THREE.Mesh(smallLanternGeo, smallLanternMat);
   smallLantern.position.set(0, 1.62, 0.58);
   group.add(smallLantern);
 
-  const playerLight = new THREE.PointLight(0xffb347, 2.2, 12);
+  const playerLight = new THREE.PointLight(0xffb347, 2.4, 14);
   playerLight.position.set(0, 1.65, 0.6);
   group.add(playerLight);
 
@@ -147,10 +355,43 @@ export function createMayCharacterMesh(): { group: THREE.Group; orbitGroup: THRE
   return { group, orbitGroup };
 }
 
-export function createFireflyMesh(): THREE.Mesh {
-  const geo = new THREE.SphereGeometry(0.2, 12, 12);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xfff6c2 });
-  return new THREE.Mesh(geo, mat);
+export function createFireflyMesh(isDropped = false): THREE.Group {
+  ensureTextures();
+  const group = new THREE.Group();
+
+  // Firefly Core (#FFF6C2)
+  const geo = new THREE.SphereGeometry(0.18, 12, 12);
+  const mat = new THREE.MeshBasicMaterial({ color: isDropped ? 0xffb347 : 0xfff6c2 });
+  const core = new THREE.Mesh(geo, mat);
+  group.add(core);
+
+  // Firefly Halo (#FFE58A) using downloaded spark1.png sprite
+  const spriteMat = new THREE.SpriteMaterial({
+    map: sparkTex ?? undefined,
+    color: 0xffe58a,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+  });
+  const halo = new THREE.Sprite(spriteMat);
+  halo.scale.set(0.95, 0.95, 0.95);
+  group.add(halo);
+
+  return group;
+}
+
+export function createPulseWaveMesh(): THREE.Mesh {
+  const geo = new THREE.RingGeometry(0.2, 1.0, 48);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffe9b0,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.0,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.visible = false;
+  return mesh;
 }
 
 export function createGreatLanternMesh(safeRadius: number): {
@@ -179,11 +420,11 @@ export function createGreatLanternMesh(safeRadius: number): {
   coreMesh.position.y = 3.1;
   group.add(coreMesh);
 
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.65, 8), stoneMat);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.95, 0.65, 8), stoneMat);
   roof.position.y = 3.85;
   group.add(roof);
 
-  const light = new THREE.PointLight(0xffb347, 0.2, safeRadius * 2.0);
+  const light = new THREE.PointLight(0xffb347, 0.2, safeRadius * 2.2);
   light.position.y = 3.1;
   group.add(light);
 
@@ -213,6 +454,19 @@ export function createInkShadowMesh(): { group: THREE.Group; body: THREE.Mesh } 
   const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7, 1), bodyMat);
   body.position.y = 0.85;
   group.add(body);
+
+  // Subtle purple rim aura (#7A3CFF)
+  const rimGeo = new THREE.SphereGeometry(0.88, 12, 12);
+  const rimMat = new THREE.MeshBasicMaterial({
+    color: 0x7a3cff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.25,
+  });
+  const rim = new THREE.Mesh(rimGeo, rimMat);
+  rim.position.y = 0.85;
+  group.add(rim);
+
   return { group, body };
 }
 

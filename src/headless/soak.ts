@@ -83,14 +83,29 @@ export function runSoakTest(args: SoakArgs): SoakOutput {
   let crashes = 0;
   let memStartMb = 0;
 
-  // Engine & V8 JIT warmup before loading Night 1 so JIT code-cache allocation does not skew Night 1 RSS baseline
+  // Engine & V8 JIT warmup across all 3 Night codepaths before loading Night 1 so JIT tier-up doesn't skew baseline RSS
   {
-    const warm = createWorld({ seed: args.seed, night: 1, contractVersion: '1.3' });
-    const warmInput = createDefaultInputState();
-    for (let t = 0; t < 120; t++) {
-      stepWorld(warm.world, warm.prng, warmInput, { tick: t, move: [0, 1] });
+    for (const wNight of [1, 2, 3] as const) {
+      const warm = createWorld({ seed: args.seed, night: wNight, contractVersion: '1.3' });
+      const warmInput = createDefaultInputState();
+      for (let t = 0; t < 600; t++) {
+        warmInput.jump = false;
+        warmInput.dash = false;
+        warmInput.pulse = false;
+        warmInput.interact = false;
+        stepWorld(warm.world, warm.prng, warmInput, {
+          tick: t,
+          move: [t % 2 === 0 ? 1 : 0, 1],
+          jump: t % 20 === 0,
+          dash: t % 30 === 0,
+          pulse: t % 50 === 0,
+          interact: t % 10 === 0,
+        });
+        warm.world.events.length = 0;
+      }
+      resetWorldForReuse(warm.world);
     }
-    resetWorldForReuse(warm.world);
+    runGarbageCollection();
     runGarbageCollection();
   }
 
@@ -170,6 +185,7 @@ export function runSoakTest(args: SoakArgs): SoakOutput {
     resetWorldForReuse(currentWorld);
     currentWorld = null;
   }
+  runGarbageCollection();
   runGarbageCollection();
 
   const memEndMb = Math.round(process.memoryUsage().rss / (1024 * 1024));

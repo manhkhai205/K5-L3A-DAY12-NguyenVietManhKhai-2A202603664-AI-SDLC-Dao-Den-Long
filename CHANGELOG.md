@@ -14,7 +14,7 @@ Mọi thay đổi quan trọng, đặc biệt là các **Thay đổi phá vỡ t
    - Khởi động `3s` (không đo), đo đúng `--duration` giây và xuất `bench.json` (`avg_fps: 160`, `p1_low_fps: 158.8`, `frame_ms_p95: 6.3 ms`, `load_ms: 12 ms`, `peak_mem_mb: 96 MB`).
 3. **Chế độ Soak Test 10 Đêm Liên Tiếp (`src/headless/soak.ts`):**
    - Chạy headless 10 Đêm liên tiếp trong cùng một tiến trình (`Đêm 1 -> 2 -> 3` xoay vòng, `seed = 7 + i`), tự sinh input ngẫu nhiên theo seed (mỗi 30 tick chọn hướng mới; mỗi tick xác suất `5%` nhảy, `3%` lướt, `2%` tỏa sáng, `10%` tương tác).
-   - Kết quả thực tế trong `soak.json`: `crashes: 0`, `mem_start_mb: 81`, `mem_end_mb: 92` (tăng `13.6% <= 20%`), `duration_s: 0.2s`.
+   - Kết quả thực tế trong `soak.json`: `crashes: 0`, `mem_start_mb: 83`, `mem_end_mb: 88` (tăng `6.0% <= 20%`), `duration_s: 0.3s`.
 4. **Bảng Xếp Hạng Cục Bộ (`src/core/leaderboard.ts`, `leaderboard.json`, `scripts/run-game.ts`):**
    - Cho phép nhập tên (`3–12` ký tự chữ/số/`_`) sau màn Bình Minh (thắng Đêm 3) hoặc sau khi thua bất kỳ Đêm nào.
    - Lưu Top 10 sắp xếp theo `score` giảm dần (bằng điểm thì `achieved_at` sớm hơn đứng trước) vào `leaderboard.json` trên đĩa thông qua middleware `/api/leaderboard` và đồng bộ `localStorage`.

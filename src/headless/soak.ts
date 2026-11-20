@@ -119,6 +119,7 @@ export function runSoakTest(args: SoakArgs): SoakOutput {
     try {
       if (currentWorld) {
         resetWorldForReuse(currentWorld);
+        runGarbageCollection();
       }
 
       const created = createWorld({

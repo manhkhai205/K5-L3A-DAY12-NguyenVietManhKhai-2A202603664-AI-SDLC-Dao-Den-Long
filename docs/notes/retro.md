@@ -26,7 +26,7 @@
 ### Phase 4 (`tag: phase-4` / Release `v1.0.0` — `TICKET-04` & Contract `v1.3`)
 - **Yêu cầu đạt / chưa đạt & Số đo thực tế:** Đạt 100% yêu cầu `TICKET-04` và `Test Contract v1.3`:
   - **Benchmark (`bench.json`):** `avg_fps = 160.0` (ngưỡng `>= 60`), `p1_low_fps = 158.8` (ngưỡng `>= 30`), `frame_ms_p95 = 6.3 ms`, `frames = 4799`, `load_ms = 12 ms` (ngưỡng `<= 10000 ms`), `peak_mem_mb = 96 MB`.
-  - **Soak Test (`soak.json`):** Chạy 10 Đêm liên tiếp trong 1 tiến trình đạt `crashes = 0`, `mem_start_mb = 83 MB`, `mem_end_mb = 88 MB` (`+6.0% <= 20%`), `duration_s = 0.3 s`.
+  - **Soak Test (`soak.json`):** Chạy 10 Đêm liên tiếp trong 1 tiến trình đạt `crashes = 0`, `mem_start_mb = 82 MB`, `mem_end_mb = 88 MB` (`+7.3% <= 20%`), `duration_s = 0.3 s`.
   - **Bảng xếp hạng cục bộ & Dễ tiếp cận:** Lưu `leaderboard.json` Top 10, hỗ trợ `--export-leaderboard out.json`, Đổi phím 9 hành động có cảnh báo trùng phím, Phụ đề + Mũi tên mép màn hình chỉ hướng Bóng Mực xuất hiện, Giảm chuyển động, Cỡ chữ `>= 18px` & Chữ lớn `×1.25`.
 
 ---

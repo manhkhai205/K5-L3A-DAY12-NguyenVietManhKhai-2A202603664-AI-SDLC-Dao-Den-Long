@@ -1,14 +1,16 @@
 {
   "name": "dao-den-long",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Đảo Đèn Lồng — 3D Game & Deterministic Headless Engine (Day 12 AI SDLC)",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx scripts/run-game.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "headless": "tsx src/headless/cli.ts",
+    "bench": "tsx src/headless/bench.ts",
+    "soak": "tsx src/headless/soak.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "verify": "tsx scripts/verify-phase.ts",

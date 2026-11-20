@@ -147,10 +147,10 @@ export function createWorld(options: {
   seed: number;
   night?: 1 | 2 | 3;
   scenario?: ScenarioFile;
-  contractVersion?: '1.0' | '1.1' | '1.2';
+  contractVersion?: '1.0' | '1.1' | '1.2' | '1.3';
 }): { world: SimWorld; prng: PRNG } {
   const night = options.night ?? 1;
-  const contractVersion = options.contractVersion ?? '1.2';
+  const contractVersion = options.contractVersion ?? '1.3';
   const prng = new PRNG(options.seed);
   const nightInfo = getSpawnListsForNight(night);
   const sc = options.scenario;
@@ -552,7 +552,7 @@ export function stepWorld(
       // 5 fuel/sec = 5 fuelUnits per tick
       l.fuelUnits = Math.max(0, l.fuelUnits - 5);
       s.drainTicks += 1;
-      if (s.drainTicks % 60 === 0 && world.contractVersion === '1.2') {
+      if (s.drainTicks % 60 === 0 && (world.contractVersion === '1.2' || world.contractVersion === '1.3')) {
         emit('fuel_drain', {
           lantern_id: l.id,
           shade_id: s.id,
@@ -568,7 +568,7 @@ export function stepWorld(
       l.deposited = 0;
       l.everLit = true;
       l.justLitTicks = 0;
-      if (world.contractVersion === '1.2') {
+      if (world.contractVersion === '1.2' || world.contractVersion === '1.3') {
         emit('lantern_out', { lantern_id: l.id });
       }
     }
@@ -1427,7 +1427,7 @@ export function runContractSimulation(params: {
   snapshotEvery?: number;
   scenario?: ScenarioFile;
   inputs?: InputFile;
-  contractVersion?: '1.0' | '1.1' | '1.2';
+  contractVersion?: '1.0' | '1.1' | '1.2' | '1.3';
 }): { lines: string[]; finalWorld: SimWorld } {
   const snapshotEvery = params.snapshotEvery ?? 10;
   const { world, prng } = createWorld({

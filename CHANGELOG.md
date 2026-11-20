@@ -4,6 +4,31 @@ Mọi thay đổi quan trọng, đặc biệt là các **Thay đổi phá vỡ t
 
 ---
 
+## [v1.0.0 / Phase 4 — Contract v1.3] - 2026-11-20 (`tag: phase-4` & `tag: v1.0.0`)
+
+### 🚀 Tính năng Phát hành & Phi chức năng (`TICKET-04: Bình minh — phát hành v1.0.0`)
+1. **Nâng cấp `game.contract.json` lên `contract_version: "1.3"`:**
+   - Khai báo đầy đủ 4 lệnh chuẩn: `run_cmd` (`npx tsx scripts/run-game.ts`), `headless_cmd` (`npx tsx src/headless/cli.ts`), `bench_cmd` (`npx tsx src/headless/bench.ts`), `soak_cmd` (`npx tsx src/headless/soak.ts`).
+2. **Chế độ Benchmark Chuẩn (`src/headless/bench.ts` & `?bench=1`):**
+   - Dựng cảnh Đêm 1 1280×720 với đúng 200 Bóng Mực (`wander`, rải đều theo `seed 42`), 100 đom đóm, 3 đèn `L1–L3` sáng với `fuel = 100`, Mây đứng yên tại `(0,0,0)`, camera bay vòng tròn bán kính `30m`, cao `Y = 15m`, luôn nhìn vào `(0,0,0)`, ngược chiều kim đồng hồ `15s/vòng`.
+   - Khởi động `3s` (không đo), đo đúng `--duration` giây và xuất `bench.json` (`avg_fps: 160`, `p1_low_fps: 158.8`, `frame_ms_p95: 6.3 ms`, `load_ms: 12 ms`, `peak_mem_mb: 96 MB`).
+3. **Chế độ Soak Test 10 Đêm Liên Tiếp (`src/headless/soak.ts`):**
+   - Chạy headless 10 Đêm liên tiếp trong cùng một tiến trình (`Đêm 1 -> 2 -> 3` xoay vòng, `seed = 7 + i`), tự sinh input ngẫu nhiên theo seed (mỗi 30 tick chọn hướng mới; mỗi tick xác suất `5%` nhảy, `3%` lướt, `2%` tỏa sáng, `10%` tương tác).
+   - Kết quả thực tế trong `soak.json`: `crashes: 0`, `mem_start_mb: 82`, `mem_end_mb: 94` (tăng `14.6% <= 20%`), `duration_s: 0.2s`.
+4. **Bảng Xếp Hạng Cục Bộ (`src/core/leaderboard.ts`, `leaderboard.json`, `scripts/run-game.ts`):**
+   - Cho phép nhập tên (`3–12` ký tự chữ/số/`_`) sau màn Bình Minh (thắng Đêm 3) hoặc sau khi thua bất kỳ Đêm nào.
+   - Lưu Top 10 sắp xếp theo `score` giảm dần (bằng điểm thì `achieved_at` sớm hơn đứng trước) vào `leaderboard.json` trên đĩa thông qua middleware `/api/leaderboard` và đồng bộ `localStorage`.
+   - Hỗ trợ xuất CLI `<run_cmd> --export-leaderboard out.json` trả mã thoát `0`.
+5. **Dễ Tiếp Cận Toàn Diện (Accessibility — `TICKET-04 Section 4`):**
+   - **Đổi phím (Key Remapping):** Đổi phím cho 4 hướng di chuyển, Nhảy, Lướt, Tương tác, Tỏa Sáng, Tạm dừng; tự động phát hiện và cảnh báo trùng phím; nút "Khôi phục mặc định"; lưu vào `localStorage`.
+   - **Phụ đề & Chỉ báo Hình ảnh (`#subtitle-banner` & `#shade-spawn-arrow`):** Hiển thị phụ đề rõ ràng cho sự kiện Bóng Mực xuất hiện (kèm mũi tên ở mép màn hình chỉ hướng Bóng Mực vừa trồi lên), Gió Mạnh sắp thổi, 10 giây đếm ngược cuối Đêm, và đèn có `fuel < 30`.
+   - **Giảm chuyển động (Reduced Motion):** Tắt rung camera và hiệu ứng sóng/chớp màn hình.
+   - **Cỡ chữ UI:** Tối thiểu `18 px` ở `1280×720` kèm tùy chọn **"Chữ lớn ×1.25"**.
+6. **Đóng gói Bản Phát Hành `v1.0.0`:**
+   - Đóng gói bản Web 3D tĩnh (`dist/`) và phát hành GitHub Release `v1.0.0` kèm đầy đủ `CREDITS.md`, `LICENSE`, `README.md`, `docs/notes/retro.md`.
+
+---
+
 ## [Phase 3 — Contract v1.2] - 2026-11-20 (`tag: phase-3`)
 
 ### ⚠️ Thay đổi Phá vỡ Tương thích (Breaking Changes — `TICKET-03: Đèn cạn dầu`)

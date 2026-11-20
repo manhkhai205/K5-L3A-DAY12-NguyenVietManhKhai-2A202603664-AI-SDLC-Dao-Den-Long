@@ -69,16 +69,17 @@ function parseCliArgs(argv: string[]): CliArgs {
   };
 }
 
-function readContractVersion(): '1.0' | '1.1' | '1.2' {
+function readContractVersion(): '1.0' | '1.1' | '1.2' | '1.3' {
   try {
     const raw = readFileSync(resolve(process.cwd(), 'game.contract.json'), 'utf-8');
     const parsed = JSON.parse(raw);
+    if (parsed.contract_version === '1.3') return '1.3';
     if (parsed.contract_version === '1.2') return '1.2';
     if (parsed.contract_version === '1.1') return '1.1';
   } catch {
-    // Default to 1.2
+    // Default to 1.3
   }
-  return '1.2';
+  return '1.3';
 }
 
 function main() {

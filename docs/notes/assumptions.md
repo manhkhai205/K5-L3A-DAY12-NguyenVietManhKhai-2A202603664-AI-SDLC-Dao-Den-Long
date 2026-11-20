@@ -58,3 +58,18 @@ Tài liệu này ghi lại toàn bộ các **giả định cho những chỗ mơ
 | Thắng ngay khi tất cả đèn sáng (`reason: "all_lit"`). Thời gian 3 Đêm `300/330/360s`. | Không còn thắng sớm. Thời gian 3 Đêm `240/270/300s`. Thắng khi sống sót tới hết giờ (`time_left_s == 0`) và số đèn sáng `>= ceil(0.6 * total)` (`reason: "dawn_survived"`). | Cập nhật bài test `scenarios/smoke.json` trong `tests/core.test.ts` kèm comment giải thích lý do game vẫn ở `'playing'` sau khi thắp đủ 5 đèn ở tick 101; thêm scenario `scenarios/p3-dawn-win.json`. |
 | Sức chứa cố định `10`; công thức điểm cũ (`+10`/đốm, thưởng thời gian còn lại). | Sức chứa tăng dần `capacity = min(20, 10 + 2 * successful_lights)`. Điểm mới: `+5`/đốm nạp, `+100` thắp lần đầu, `+40` thắp lại, `+5` choáng thường / `+15` choáng khi đang `drain`, thưởng bình minh `+50 + floor(fuel)` mỗi đèn sáng + `+50` mỗi Ngọn Lửa còn lại. | Cập nhật `STANDARD_TUNING.score`, `computePlayerCapacity` và toàn bộ assertions điểm số trong `tests/core.test.ts`. |
 | Chưa có chế độ mù màu. | Thêm cài đặt "Bảng màu dễ phân biệt" (Colorblind Mode) lưu `localStorage`: viền/mắt Bóng Mực `#00B3FF`, cảnh báo UI `#FFFFFF` kèm `⚠`, đèn tắt xẹp `20%` kèm vết rách, thanh dầu 3D trên đèn nhấp nháy `1 Hz` khi `fuel < 30`. | Cập nhật `index.html`, `src/render/meshes.ts`, `src/render/hud.ts`, `src/render/main.ts`. |
+
+---
+
+## Phase 4 — TICKET-04 ("Bình minh: phát hành v1.0.0") & Test Contract v1.3 (`tag: phase-4`)
+
+### 1. Tiêu Chí Nghiệm Thu Phi Chức Năng & Phát Hành (Ticket-04)
+
+| Hạng mục (Ticket-04) | Tiêu chí Nghiệm thu Kiểm chứng được (Acceptance Criteria) | Bằng chứng / Lệnh Kiểm chứng |
+|---|---|---|
+| **1. Chế độ Benchmark (`bench_cmd`)** | Chạy `npx tsx src/headless/bench.ts --seed 42 --duration 30 --out bench.json` tạo cảnh Đêm 1 với 200 Bóng Mực `wander`, 100 đom đóm, 3 đèn `L1–L3` sáng (`fuel = 100`), camera bay vòng `R=30m, Y=15m` ngược chiều kim đồng hồ `15s/vòng`, 3s warmup + 30s đo. Đạt `avg_fps >= 60` (`160.0`), `p1_low_fps >= 30` (`158.8`), `load_ms <= 10000` (`12 ms`), thoát mã `0`. | `bench.json` & `docs/proof/phase-4/bench.json` |
+| **2. Kiểm thử độ bền (`soak_cmd`)** | Chạy `npx tsx src/headless/soak.ts --seed 7 --nights 10 --out soak.json` qua 10 Đêm liên tiếp trong 1 tiến trình với input ngẫu nhiên theo seed (`7 + i`). Đạt `crashes == 0`, `mem_end_mb <= 1.2 * mem_start_mb` (`82 MB -> 94 MB`, `+14.6%`), thoát mã `0`. | `soak.json` & `docs/proof/phase-4/soak.json` |
+| **3. Bảng xếp hạng cục bộ (`Leaderboard`)** | Cho phép nhập tên (`3–12` ký tự `[A-Za-z0-9_]`) sau màn Bình Minh hoặc khi thua, lưu Top 10 vào `leaderboard.json`. Lệnh `npx tsx scripts/run-game.ts --export-leaderboard out.json` xuất đúng thứ tự Top 10 và thoát mã `0`. | `leaderboard.json`, `docs/proof/phase-4/exported-leaderboard.json` & `tests/core.test.ts` |
+| **4. Dễ tiếp cận (`Accessibility`)** | Đổi phím cho 9 hành động + cảnh báo trùng phím + nút "Khôi phục mặc định"; Phụ đề & Mũi tên mép màn hình chỉ hướng Bóng Mực mới xuất hiện; Chế độ mù màu; Giảm chuyển động; Cỡ chữ `>= 18px` + nút "Chữ lớn ×1.25". Toàn bộ lưu trong `localStorage`. | `index.html`, `src/render/hud.ts`, `src/render/main.ts` |
+| **5. Đóng gói & Phát hành `v1.0.0`** | Cài đặt và chạy với `<= 3` lệnh (`npm install`, `npm run dev`), có đủ `README.md`, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `docs/notes/retro.md`, tag `phase-4` và GitHub Release `v1.0.0`. | GitHub Release `v1.0.0` & `dist/` |
+

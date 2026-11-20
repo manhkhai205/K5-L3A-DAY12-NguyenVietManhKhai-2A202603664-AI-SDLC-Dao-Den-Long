@@ -1,7 +1,55 @@
 import * as THREE from 'three';
 import { FUEL_UNITS_PER_FUEL, MAX_FUEL_UNITS, TICK_RATE } from '../core/config.ts';
 import { distXZ } from '../core/engine.ts';
-import { SimWorld } from '../core/types.ts';
+import { SimWorld, Vec3Tuple } from '../core/types.ts';
+
+export interface KeyBindings {
+  up: string;
+  down: string;
+  left: string;
+  right: string;
+  jump: string;
+  dash: string;
+  interact: string;
+  pulse: string;
+  pause: string;
+}
+
+export const DEFAULT_KEY_BINDINGS: KeyBindings = {
+  up: 'KeyW',
+  down: 'KeyS',
+  left: 'KeyA',
+  right: 'KeyD',
+  jump: 'Space',
+  dash: 'ShiftLeft',
+  interact: 'KeyE',
+  pulse: 'KeyQ',
+  pause: 'KeyP',
+};
+
+export const KEY_ACTION_LABELS: Record<keyof KeyBindings, string> = {
+  up: 'Đi lên',
+  down: 'Đi xuống',
+  left: 'Sang trái',
+  right: 'Sang phải',
+  jump: 'Nhảy',
+  dash: 'Lướt (Dash)',
+  interact: 'Tương tác (Đèn)',
+  pulse: 'Tỏa Sáng (Pulse)',
+  pause: 'Tạm dừng',
+};
+
+export function formatKeyCode(code: string): string {
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code === 'ShiftLeft' || code === 'ShiftRight') return 'Shift';
+  if (code === 'ControlLeft' || code === 'ControlRight') return 'Ctrl';
+  if (code === 'ArrowUp') return '↑';
+  if (code === 'ArrowDown') return '↓';
+  if (code === 'ArrowLeft') return '←';
+  if (code === 'ArrowRight') return '→';
+  return code;
+}
 
 export const NIGHT_TITLES: Record<1 | 2 | 3, string> = {
   1: 'Đêm 1 — Đảo Bến (Cần giữ 3/5 đèn sáng tới bình minh)',
@@ -12,7 +60,7 @@ export const NIGHT_TITLES: Record<1 | 2 | 3, string> = {
 export const NIGHT_LORE: Record<1 | 2 | 3, string> = {
   1: 'Ông Đăng: "Đêm 1 tại Đảo Bến (240 giây)! Đèn đã thắp sẽ cạn dầu dần (1 dầu/giây) và Bóng Mực sẽ lao vào hút dầu khi dầu dưới 30! Hãy châm thêm đom đóm để giữ ít nhất 3/5 Đèn Lồng Lớn sáng tới lúc bình minh nhé Mây!"',
   2: 'Ông Đăng: "Đêm 2 tại Đảo Cau (270 giây)! Giữ ít nhất 4/6 Đèn Lồng Lớn sáng tới bình minh. Mỗi lần thắp đèn thành công sức chứa của cháu tăng thêm +2 (tối đa 20)!"',
-  3: 'Ông Đăng: "Đêm 3 tại Đảo Chuông (300 giây)! Giữ ít nhất 5/7 Đèn Lồng Lớn sáng tới bình minh trên hòn đảo 3 tầng. Bấm Tỏa Sáng (Q) trúng Bóng Mực đang hút dầu sẽ được thưởng +15 điểm!"',
+  3: 'Ông Đăng: "Đêm 3 tại Đảo Chuông (300 giây)! Giữ ít nhất 5/7 Đèn Lồng Lớn sáng tới bình minh trên hòn đảo 3 tầng. Bấm Tỏa Sáng trúng Bóng Mực đang hút dầu sẽ được thưởng +15 điểm!"',
 };
 
 export function initMoteSlots(capacity = 10): void {
@@ -27,12 +75,23 @@ export function initMoteSlots(capacity = 10): void {
   }
 }
 
+export interface SubtitleState {
+  eventText: string;
+  eventExpireMs: number;
+  lastSpawnedShadePos: Vec3Tuple | null;
+  lastSpawnedShadeId: string;
+  shadeArrowExpireMs: number;
+}
+
 export function updateHUD(
   world: SimWorld,
   totalCampaignScore: number,
   camera: THREE.PerspectiveCamera,
   camYawDeg: number,
-  colorblindMode = false
+  colorblindMode = false,
+  keyBindings: KeyBindings = DEFAULT_KEY_BINDINGS,
+  subtitlesEnabled = true,
+  subtitleState?: SubtitleState
 ): void {
   const elNight = document.getElementById('hud-night-label');
   const elFlames = document.getElementById('stat-flames');
@@ -43,14 +102,33 @@ export function updateHUD(
   const elCarried = document.getElementById('stat-carried');
   const elCdDash = document.getElementById('cd-dash');
   const elCdPulse = document.getElementById('cd-pulse');
+  const elLblDash = document.getElementById('lbl-cd-dash');
+  const elLblPulse = document.getElementById('lbl-cd-pulse');
   const elCompassArrow = document.getElementById('compass-arrow');
   const elCompassDist = document.getElementById('compass-dist');
   const elPrompt = document.getElementById('interact-prompt');
   const elOffscreen = document.getElementById('offscreen-arrow');
+  const elSubtitle = document.getElementById('subtitle-banner');
+  const elShadeArrow = document.getElementById('shade-spawn-arrow');
+  const elControlsCard = document.getElementById('controls-help-card');
 
   if (elNight) elNight.textContent = NIGHT_TITLES[world.night];
 
-  const warnSymbol = colorblindMode ? '⚠ ' : '';
+  const warnSymbol = colorblindMode ? '◆ ' : '';
+  const interactKeyLabel = formatKeyCode(keyBindings.interact);
+  const dashKeyLabel = formatKeyCode(keyBindings.dash);
+  const pulseKeyLabel = formatKeyCode(keyBindings.pulse);
+  const pauseKeyLabel = formatKeyCode(keyBindings.pause);
+
+  if (elLblDash) elLblDash.textContent = `Lướt (${dashKeyLabel})`;
+  if (elLblPulse) elLblPulse.textContent = `Tỏa Sáng (${pulseKeyLabel})`;
+  if (elControlsCard) {
+    const moveKeys = `${formatKeyCode(keyBindings.up)}${formatKeyCode(keyBindings.left)}${formatKeyCode(keyBindings.down)}${formatKeyCode(keyBindings.right)}`;
+    elControlsCard.innerHTML =
+      `<b>Chuột / ←→</b>: Xoay hướng · <b>${moveKeys}</b>: Di chuyển<br />` +
+      `<b>${formatKeyCode(keyBindings.jump)}</b>: Nhảy · <b>${dashKeyLabel}</b>: Lướt · <b>${interactKeyLabel}</b>: Thắp/Châm dầu<br />` +
+      `<b>${pulseKeyLabel}</b>: Tỏa Sáng (3 đốm) · <b>${pauseKeyLabel}</b>: Cài đặt & Đổi phím`;
+  }
 
   if (elFlames) {
     const hearts = '🔥'.repeat(Math.max(0, world.player.flames));
@@ -124,10 +202,76 @@ export function updateHUD(
     }
   }
 
+  // Subtitles & Visual Indicators (Ticket-04 Section 4: Shade spawned + directional arrow, wind warning, final 10s, low fuel < 30)
+  const nowMs = performance.now();
+  if (elSubtitle) {
+    if (!subtitlesEnabled || world.state !== 'playing') {
+      elSubtitle.style.display = 'none';
+    } else {
+      const subParts: string[] = [];
+      if (subtitleState && nowMs < subtitleState.eventExpireMs && subtitleState.eventText) {
+        subParts.push(subtitleState.eventText);
+      }
+      if (world.wind.warning) {
+        subParts.push('💨 [Cảnh báo âm thanh] Gió Mạnh sắp thổi sau 2 giây!');
+      } else if (world.wind.active) {
+        subParts.push(`💨 [Gió Mạnh] Gió đang thổi hướng ${world.wind.dirDeg.toFixed(0)}°!`);
+      }
+      if (secLeft <= 10 && secLeft > 0) {
+        subParts.push(`⏳ [Đếm ngược] Còn ${secLeft} giây cuối tới bình minh!`);
+      }
+      const lowFuelLanterns = world.lanterns.filter(
+        (l) => l.lit && l.fuelUnits < world.tuning.low_fuel_threshold * FUEL_UNITS_PER_FUEL
+      );
+      if (lowFuelLanterns.length > 0) {
+        const names = lowFuelLanterns
+          .map((l) => `${l.id} (${Math.ceil(l.fuelUnits / FUEL_UNITS_PER_FUEL)}%)`)
+          .join(', ');
+        subParts.push(`🏮 [Cảnh báo đèn yếu] Đèn ${names} có dầu < 30% (mất vùng an toàn)!`);
+      }
+
+      if (subParts.length > 0) {
+        elSubtitle.style.display = 'block';
+        elSubtitle.textContent = subParts.join('  |  ');
+      } else {
+        elSubtitle.style.display = 'none';
+      }
+    }
+  }
+
+  // Screen-edge directional arrow pointing to newly spawned Ink Shadow (Ticket-04 Section 4)
+  if (elShadeArrow) {
+    if (
+      subtitlesEnabled &&
+      world.state === 'playing' &&
+      subtitleState &&
+      subtitleState.lastSpawnedShadePos &&
+      nowMs < subtitleState.shadeArrowExpireMs
+    ) {
+      const sp = subtitleState.lastSpawnedShadePos;
+      const dx = sp[0] - world.player.pos[0];
+      const dz = sp[2] - world.player.pos[2];
+      const dist = Math.hypot(dx, dz);
+      const worldAngleDeg = (Math.atan2(dx, dz) * 180) / Math.PI;
+      const relAngleDeg = worldAngleDeg - camYawDeg;
+      const rad = (relAngleDeg * Math.PI) / 180;
+      const marginX = window.innerWidth * 0.43;
+      const marginY = window.innerHeight * 0.39;
+      const cx = window.innerWidth / 2 + Math.sin(rad) * marginX;
+      const cy = window.innerHeight / 2 - Math.cos(rad) * marginY;
+
+      elShadeArrow.style.display = 'block';
+      elShadeArrow.style.left = `${Math.max(85, Math.min(window.innerWidth - 85, cx))}px`;
+      elShadeArrow.style.top = `${Math.max(80, Math.min(window.innerHeight - 80, cy))}px`;
+      elShadeArrow.textContent = `⚠ Bóng Mực ${subtitleState.lastSpawnedShadeId} (${dist.toFixed(0)}m)`;
+    } else {
+      elShadeArrow.style.display = 'none';
+    }
+  }
+
   // Nearest actionable lantern (unlit OR lit with fuel < 100)
   const actionable = world.lanterns.filter((l) => !l.lit || l.fuelUnits < MAX_FUEL_UNITS);
   if (actionable.length > 0) {
-    // Prioritize unlit or low-fuel (<30) lanterns for compass, then any refuelable lantern
     const urgent = actionable.filter(
       (l) => !l.lit || l.fuelUnits < world.tuning.low_fuel_threshold * FUEL_UNITS_PER_FUEL
     );
@@ -174,10 +318,10 @@ export function updateHUD(
         elPrompt.style.display = 'block';
         if (!nearestAny.lit) {
           const cost = nearestAny.everLit ? world.tuning.relight_cost : world.tuning.lantern_cost;
-          elPrompt.textContent = `E — ${nearestAny.everLit ? 'Thắp lại đèn' : 'Nạp ánh sáng'} (${nearestAny.deposited}/${cost})`;
+          elPrompt.textContent = `${interactKeyLabel} — ${nearestAny.everLit ? 'Thắp lại đèn' : 'Nạp ánh sáng'} (${nearestAny.deposited}/${cost})`;
         } else {
           const fuelVal = (nearestAny.fuelUnits / FUEL_UNITS_PER_FUEL).toFixed(0);
-          elPrompt.textContent = `E — Châm dầu đèn ${nearestAny.id} (Dầu: ${fuelVal}/100)`;
+          elPrompt.textContent = `${interactKeyLabel} — Châm dầu đèn ${nearestAny.id} (Dầu: ${fuelVal}/100)`;
         }
       } else {
         elPrompt.style.display = 'none';

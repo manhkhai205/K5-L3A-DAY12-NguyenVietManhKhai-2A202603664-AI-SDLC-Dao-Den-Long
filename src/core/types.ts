@@ -191,7 +191,7 @@ export interface SimEvent {
 }
 
 export interface SimWorld {
-  contractVersion: '1.0' | '1.1' | '1.2';
+  contractVersion: '1.0' | '1.1' | '1.2' | '1.3';
   seed: number;
   night: 1 | 2 | 3;
   tick: number;

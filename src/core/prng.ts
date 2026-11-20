@@ -35,6 +35,11 @@ export class PRNG {
     return min + this.next() * (max - min);
   }
 
+  /** Alias for range(min, max) */
+  public nextRange(min: number, max: number): number {
+    return this.range(min, max);
+  }
+
   /** Returns a deterministic integer in [min, max] inclusive */
   public int(min: number, max: number): number {
     return Math.floor(this.range(min, max + 1));

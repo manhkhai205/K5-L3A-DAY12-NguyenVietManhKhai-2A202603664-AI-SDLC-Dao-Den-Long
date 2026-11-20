@@ -3,8 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Đảo Đèn Lồng — Day 12 AI SDLC</title>
+    <title>Đảo Đèn Lồng v1.0.0 — Day 12 AI SDLC</title>
     <style>
+      :root {
+        --base-font: 18px;
+        --title-font: 26px;
+        --clock-font: 28px;
+      }
+      body.large-text {
+        --base-font: 22.5px;
+        --title-font: 32px;
+        --clock-font: 35px;
+      }
       * {
         box-sizing: border-box;
         margin: 0;
@@ -18,6 +28,7 @@
         background: #0E1430;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #F5F1E6;
+        font-size: var(--base-font);
       }
       #game-canvas {
         display: block;
@@ -29,13 +40,14 @@
         cursor: grabbing;
       }
       .hud-card {
-        background: rgba(14, 20, 48, 0.85);
-        border: 1px solid #F2C14E;
+        background: rgba(14, 20, 48, 0.88);
+        border: 1.5px solid #F2C14E;
         border-radius: 12px;
         padding: 12px 16px;
         backdrop-filter: blur(8px);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
         pointer-events: auto;
+        font-size: var(--base-font);
       }
       #hud-top {
         position: fixed;
@@ -47,6 +59,7 @@
         align-items: flex-start;
         pointer-events: none;
         z-index: 10;
+        gap: 12px;
       }
       #hud-bottom {
         position: fixed;
@@ -58,9 +71,10 @@
         align-items: flex-end;
         pointer-events: none;
         z-index: 10;
+        gap: 12px;
       }
       #clock-box {
-        font-size: 24px;
+        font-size: var(--clock-font);
         font-weight: 800;
         letter-spacing: 1px;
         color: #F5F1E6;
@@ -68,6 +82,9 @@
       #clock-box.danger {
         color: #FF5A5F;
         animation: blink 0.6s infinite alternate;
+      }
+      body.reduced-motion #clock-box.danger {
+        animation: none;
       }
       body.colorblind #clock-box.danger {
         color: #FFFFFF;
@@ -82,7 +99,9 @@
       .mote-slots {
         display: flex;
         gap: 6px;
-        margin-top: 6px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
       }
       .mote-slot {
         width: 20px;
@@ -97,43 +116,85 @@
       }
       #interact-prompt {
         position: fixed;
-        bottom: 105px;
+        bottom: 165px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(14, 20, 48, 0.92);
-        border: 1.5px solid #FFB347;
+        background: rgba(14, 20, 48, 0.94);
+        border: 2px solid #FFB347;
         color: #FFE9B0;
-        padding: 8px 18px;
-        border-radius: 20px;
+        padding: 10px 22px;
+        border-radius: 22px;
         font-weight: 700;
-        font-size: 15px;
+        font-size: var(--base-font);
         display: none;
-        z-index: 12;
+        z-index: 14;
+      }
+      /* Subtitle / Visual Caption Banner (Ticket-04 Section 4) */
+      #subtitle-banner {
+        position: fixed;
+        bottom: 112px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(10, 14, 34, 0.94);
+        border: 2px solid #F2C14E;
+        color: #FFF6C2;
+        padding: 8px 20px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: var(--base-font);
+        text-align: center;
+        display: none;
+        z-index: 15;
+        max-width: 85vw;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
       }
       #offscreen-arrow {
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: rgba(14, 20, 48, 0.9);
+        background: rgba(14, 20, 48, 0.92);
         border: 2px solid #FFB347;
         color: #FFB347;
-        padding: 6px 12px;
+        padding: 6px 14px;
         border-radius: 999px;
         font-weight: 800;
-        font-size: 14px;
+        font-size: var(--base-font);
         pointer-events: none;
         display: none;
         z-index: 15;
         box-shadow: 0 0 14px rgba(255, 179, 71, 0.45);
       }
+      /* Screen-edge arrow indicating newly spawned Ink Shadow direction (Ticket-04 Section 4) */
+      #shade-spawn-arrow {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(58, 12, 94, 0.94);
+        border: 2.5px solid #FF5A5F;
+        color: #FFE9B0;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: var(--base-font);
+        pointer-events: none;
+        display: none;
+        z-index: 16;
+        box-shadow: 0 0 18px rgba(255, 90, 95, 0.65);
+      }
+      body.colorblind #shade-spawn-arrow {
+        background: rgba(0, 58, 94, 0.95);
+        border-color: #00B3FF;
+        color: #FFFFFF;
+      }
       button.hud-btn {
         background: rgba(242, 193, 78, 0.18);
         color: #F2C14E;
-        border: 1px solid #F2C14E;
+        border: 1.5px solid #F2C14E;
         padding: 6px 12px;
-        border-radius: 6px;
-        font-size: 12px;
+        border-radius: 8px;
+        font-size: var(--base-font);
         font-weight: 600;
         cursor: pointer;
       }
@@ -148,41 +209,94 @@
         justify-content: center;
         align-items: center;
         z-index: 30;
+        padding: 16px;
       }
       .modal-box {
         background: #0E1430;
         border: 2px solid #F2C14E;
         border-radius: 16px;
-        padding: 28px 36px;
-        max-width: 520px;
-        width: 92%;
+        padding: 24px 30px;
+        max-width: 720px;
+        max-height: 92vh;
+        overflow-y: auto;
+        width: 95%;
         text-align: center;
         box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+        font-size: var(--base-font);
       }
       .modal-box h2 {
         color: #FFB347;
-        font-size: 26px;
+        font-size: var(--title-font);
         margin-bottom: 10px;
       }
       .modal-box p {
         color: #F5F1E6;
-        font-size: 14px;
-        line-height: 1.6;
-        margin-bottom: 18px;
+        font-size: var(--base-font);
+        line-height: 1.55;
+        margin-bottom: 16px;
       }
       .modal-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
         justify-content: center;
+        margin-top: 14px;
+      }
+      .keybind-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 8px;
+        text-align: left;
+        margin: 12px 0;
+      }
+      .keybind-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(242, 193, 78, 0.3);
+      }
+      .leaderboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: var(--base-font);
+      }
+      .leaderboard-table th,
+      .leaderboard-table td {
+        border-bottom: 1px solid rgba(242, 193, 78, 0.28);
+        padding: 8px 10px;
+        text-align: center;
+      }
+      .leaderboard-table th {
+        color: #FFB347;
+        font-weight: 700;
+      }
+      .name-input {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1.5px solid #F2C14E;
+        color: #FFF6C2;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: var(--base-font);
+        width: 220px;
+        user-select: text;
       }
     </style>
   </head>
   <body>
     <canvas id="game-canvas"></canvas>
 
-    <!-- Off-screen nearest unlit lantern arrow indicator -->
+    <!-- Off-screen nearest actionable lantern arrow indicator -->
     <div id="offscreen-arrow">▲ L1</div>
+
+    <!-- Screen-edge newly spawned Ink Shadow directional indicator (Ticket-04 Section 4) -->
+    <div id="shade-spawn-arrow">⚠ Bóng Mực ▲</div>
+
+    <!-- Subtitle / Visual Caption Banner for important audio events (Ticket-04 Section 4) -->
+    <div id="subtitle-banner" role="status" aria-live="polite"></div>
 
     <!-- Top HUD -->
     <div id="hud-top">
@@ -191,72 +305,72 @@
         <div style="font-weight: 700; color: #FFB347; margin-bottom: 4px" id="hud-night-label">
           Đêm 1 — Đảo Bến
         </div>
-        <div style="font-size: 15px">
+        <div>
           Ngọn Lửa (HP): <strong id="stat-flames" style="color: #FF5A5F">🔥🔥🔥 (3)</strong>
         </div>
-        <div style="font-size: 12px; color: #8FA3B8; margin-top: 4px" id="stat-status-fx">
+        <div style="color: #FFE9B0; margin-top: 4px" id="stat-status-fx">
           Trạng thái: Bình thường
         </div>
         <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap">
           <button class="hud-btn" id="btn-night-1">Đêm 1</button>
           <button class="hud-btn" id="btn-night-2">Đêm 2</button>
           <button class="hud-btn" id="btn-night-3">Đêm 3</button>
+          <button class="hud-btn" id="btn-open-leaderboard">🏆 Bảng xếp hạng</button>
           <button class="hud-btn" id="btn-menu">Menu</button>
-          <button class="hud-btn" id="btn-pause">Tạm dừng (P)</button>
+          <button class="hud-btn" id="btn-pause">Cài đặt / Phím (P)</button>
         </div>
       </div>
 
       <!-- Top Center: Clock mm:ss -->
-      <div class="hud-card" id="clock-box">05:00</div>
+      <div class="hud-card" id="clock-box">04:00</div>
 
       <!-- Top Right: Lanterns k/n, Score & Lantern Compass -->
-      <div class="hud-card" style="text-align: right; min-width: 205px">
-        <div style="font-size: 15px">
+      <div class="hud-card" style="text-align: right; min-width: 240px">
+        <div>
           Đèn Lồng Lớn: <strong id="stat-lanterns" style="color: #FFB347">0 / 5</strong>
         </div>
-        <div style="font-size: 16px; margin-top: 4px">
+        <div style="margin-top: 4px">
           Điểm số: <strong id="stat-score" style="color: #F2C14E">0</strong>
         </div>
-        <div style="margin-top: 6px; font-size: 13px; color: #FFE9B0">
+        <div style="margin-top: 6px; color: #FFE9B0">
           La bàn đèn: <span id="compass-arrow" style="display: inline-block; font-weight: 800">▲</span>
           <span id="compass-dist">--m</span>
         </div>
-        <div style="margin-top: 4px; font-size: 11px; color: #8FA3B8" id="cam-status-hint">
-          Chuột: Click vào cảnh hoặc Kéo chuột để xoay 360°
+        <div style="margin-top: 4px; color: #BFD1E5" id="cam-status-hint">
+          Chuột: Click vào cảnh hoặc Kéo chuột xoay 360°
         </div>
       </div>
     </div>
 
-    <!-- Center Prompt when near unlit lantern -->
+    <!-- Center Prompt when near actionable lantern -->
     <div id="interact-prompt">E — Nạp ánh sáng (0/10)</div>
 
     <!-- Bottom HUD -->
     <div id="hud-bottom">
       <!-- Bottom Left: Controls help -->
-      <div class="hud-card" style="font-size: 12px; line-height: 1.5; max-width: 340px">
-        <b>Chuột (Click khóa tâm / Kéo chuột)</b> hoặc <b>←/→</b>: Xoay hướng nhìn<br />
-        <b>WASD</b>: Di chuyển theo hướng nhìn · <b>Space</b>: Nhảy · <b>Shift</b>: Lướt<br />
-        <b>E</b>: Nạp đom đóm vào đèn · <b>Q / F</b>: Tỏa Sáng (tốn 3 đom đóm)<br />
-        <b>P</b>: Tạm dừng / Cài đặt · <b>R</b>: Chơi lại Đêm
+      <div class="hud-card" style="line-height: 1.45; max-width: 430px" id="controls-help-card">
+        <b>Chuột / ←→</b>: Xoay hướng nhìn · <b>WASD</b>: Di chuyển<br />
+        <b>Space</b>: Nhảy · <b>Shift</b>: Lướt · <b>E</b>: Thắp / Châm dầu<br />
+        <b>Q</b>: Tỏa Sáng (3 đốm) · <b>P</b>: Cài đặt & Đổi phím
       </div>
 
-      <!-- Bottom Center: 10 Mote Slots -->
+      <!-- Bottom Center: Mote Slots -->
       <div class="hud-card" style="text-align: center">
-        <div style="font-size: 13px; color: #FFE58A">
+        <div style="color: #FFE58A">
           Đom đóm đang mang: <strong id="stat-carried">0 / 10</strong>
         </div>
         <div class="mote-slots" id="mote-slots-container"></div>
       </div>
 
       <!-- Bottom Right: Cooldown Icons (Dash & Pulse) -->
-      <div class="hud-card" style="display: flex; gap: 14px; align-items: center">
+      <div class="hud-card" style="display: flex; gap: 16px; align-items: center">
         <div style="text-align: center">
-          <div style="font-size: 12px; color: #8FA3B8">Lướt (Shift)</div>
-          <div id="cd-dash" style="font-size: 15px; font-weight: 700; color: #FFE9B0">Sẵn sàng</div>
+          <div style="color: #BFD1E5" id="lbl-cd-dash">Lướt (Shift)</div>
+          <div id="cd-dash" style="font-weight: 700; color: #FFE9B0">Sẵn sàng</div>
         </div>
         <div style="text-align: center">
-          <div style="font-size: 12px; color: #8FA3B8">Tỏa Sáng (Q/F)</div>
-          <div id="cd-pulse" style="font-size: 15px; font-weight: 700; color: #FFB347">Sẵn sàng</div>
+          <div style="color: #BFD1E5" id="lbl-cd-pulse">Tỏa Sáng (Q)</div>
+          <div id="cd-pulse" style="font-weight: 700; color: #FFB347">Sẵn sàng</div>
         </div>
       </div>
     </div>
@@ -264,28 +378,27 @@
     <!-- Main Menu & Ông Đăng Intro Modal -->
     <div class="modal-overlay" id="intro-modal">
       <div class="modal-box">
-        <h2 id="intro-title">Đảo Đèn Lồng</h2>
+        <h2 id="intro-title">Đảo Đèn Lồng — v1.0.0</h2>
         <p id="intro-lore">
-          Ông Đăng: "Sương đen đã nuốt mất ánh sáng của ba hòn đảo. Mây hãy gom đom đóm và thắp sáng lại các Đèn Lồng Lớn trước khi bình minh lên nhé!"
+          Ông Đăng: "Sương đen đã nuốt mất ánh sáng của ba hòn đảo. Mây hãy gom đom đóm, thắp sáng và châm dầu giữ các Đèn Lồng Lớn sáng tới lúc bình minh nhé!"
         </p>
         <div class="modal-actions">
-          <button class="hud-btn" id="btn-start-night" style="font-size: 15px; padding: 10px 22px">
+          <button class="hud-btn" id="btn-start-night" style="padding: 10px 22px">
             Bắt đầu Đêm 1 — Đảo Bến
           </button>
           <button class="hud-btn" id="btn-select-n2">Chơi Đêm 2 — Đảo Cau</button>
           <button class="hud-btn" id="btn-select-n3">Chơi Đêm 3 — Đảo Chuông</button>
+          <button class="hud-btn" id="btn-menu-leaderboard">🏆 Xem Bảng Xếp Hạng</button>
+          <button class="hud-btn" id="btn-menu-settings">⚙ Cài Đặt & Đổi Phím</button>
         </div>
       </div>
     </div>
 
-    <!-- Pause & Settings Modal -->
+    <!-- Pause, Accessibility & Key Remapping Modal (Ticket-04 Section 4) -->
     <div class="modal-overlay" id="pause-modal">
       <div class="modal-box">
-        <h2>Tạm Dừng — Cài Đặt</h2>
-        <p id="lore-text">
-          Ông Đăng nhắn: "Click trực tiếp vào màn hình game hoặc giữ kéo chuột để xoay góc nhìn 360°, lăn con lăn chuột để zoom xa/gần!"
-        </p>
-        <div style="margin-bottom: 16px; text-align: left; font-size: 13px">
+        <h2>Tạm Dừng — Cài Đặt & Dễ Tiếp Cận</h2>
+        <div style="margin-bottom: 14px; text-align: left">
           <label style="display: block; margin-bottom: 10px">
             Âm lượng (<span id="val-volume">80</span>%):
             <input type="range" id="slider-volume" min="0" max="100" value="80" style="width: 100%" />
@@ -294,11 +407,31 @@
             Độ nhạy chuột xoay camera (<span id="val-sens">5</span>):
             <input type="range" id="slider-sens" min="1" max="10" value="5" style="width: 100%" />
           </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-            <input type="checkbox" id="chk-colorblind" />
-            <span>Bảng màu dễ phân biệt (Chế độ mù màu — Ticket-03)</span>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 8px">
+            <input type="checkbox" id="chk-colorblind" style="width: 20px; height: 20px" />
+            <span>Chế độ mù màu (Đổi màu Bóng Mực sang xanh lam #00B3FF + Ký hiệu hình học)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 8px">
+            <input type="checkbox" id="chk-reduced-motion" style="width: 20px; height: 20px" />
+            <span>Giảm chuyển động (Tắt rung camera & hiệu ứng chớp màn hình)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 8px">
+            <input type="checkbox" id="chk-large-text" style="width: 20px; height: 20px" />
+            <span>Chữ lớn ×1.25 (Tăng kích thước toàn bộ chữ HUD & Menu)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 8px">
+            <input type="checkbox" id="chk-subtitles" checked style="width: 20px; height: 20px" />
+            <span>Phụ đề & Mũi tên chỉ báo hướng Bóng Mực xuất hiện / Gió / Đèn cạn dầu</span>
           </label>
         </div>
+
+        <h3 style="color: #FFB347; margin-top: 10px; margin-bottom: 6px">Đổi Phím Điều Khiển</h3>
+        <div id="keybind-warning" style="color: #FF5A5F; font-weight: 700; min-height: 24px"></div>
+        <div class="keybind-grid" id="keybind-grid"></div>
+        <div style="margin-top: 8px">
+          <button class="hud-btn" id="btn-reset-keys">Khôi phục mặc định</button>
+        </div>
+
         <div class="modal-actions">
           <button class="hud-btn" id="btn-resume">Tiếp tục</button>
           <button class="hud-btn" id="btn-restart-night">Chơi lại Đêm</button>
@@ -307,14 +440,54 @@
       </div>
     </div>
 
-    <!-- Victory / Defeat / Dawn Modal -->
+    <!-- Local Leaderboard Modal (Ticket-04 Section 3) -->
+    <div class="modal-overlay" id="leaderboard-modal">
+      <div class="modal-box">
+        <h2>🏆 Bảng Xếp Hạng Cục Bộ (Top 10)</h2>
+        <p style="margin-bottom: 8px">
+          Lưu trực tiếp vào <code>leaderboard.json</code> trên đĩa. Xuất CLI: <code>npx tsx scripts/run-game.ts --export-leaderboard out.json</code>
+        </p>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Người chơi</th>
+              <th>Tổng điểm</th>
+              <th>Đêm thắng</th>
+              <th>Seed</th>
+              <th>Thời gian</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-tbody"></tbody>
+        </table>
+        <div class="modal-actions">
+          <button class="hud-btn" id="btn-close-leaderboard">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Victory / Defeat / Dawn Modal with Leaderboard Name Entry (Ticket-04 Section 3) -->
     <div class="modal-overlay" id="end-modal">
       <div class="modal-box">
         <h2 id="end-title">Đảo Đèn Lồng Tỏa Sáng!</h2>
         <p id="end-desc"></p>
+
+        <!-- Leaderboard submission form shown at Dawn (Night 3 Win) or after Defeat -->
+        <div id="leaderboard-submit-box" style="margin: 14px 0; padding: 14px; border: 1px solid #F2C14E; border-radius: 12px; background: rgba(255, 255, 255, 0.04)">
+          <div style="margin-bottom: 8px; font-weight: 700; color: #FFE9B0">
+            Ghi danh vào Bảng Xếp Hạng (3–12 ký tự chữ/số/_):
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap">
+            <input type="text" id="input-player-name" class="name-input" maxlength="12" placeholder="Nhập tên (vd: May)" value="May" />
+            <button class="hud-btn" id="btn-save-score">Lưu Điểm</button>
+          </div>
+          <div id="leaderboard-form-msg" style="margin-top: 8px; font-weight: 600; color: #FFE58A"></div>
+        </div>
+
         <div class="modal-actions">
-          <button class="hud-btn" id="btn-next-night" style="font-size: 14px; padding: 8px 18px">Đêm kế tiếp</button>
+          <button class="hud-btn" id="btn-next-night" style="padding: 8px 18px">Đêm kế tiếp</button>
           <button class="hud-btn" id="btn-play-again">Chơi lại Đêm này</button>
+          <button class="hud-btn" id="btn-end-leaderboard">🏆 Xem Bảng Xếp Hạng</button>
         </div>
       </div>
     </div>

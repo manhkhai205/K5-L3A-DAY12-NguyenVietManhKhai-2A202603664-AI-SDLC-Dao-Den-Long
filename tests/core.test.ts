@@ -6,7 +6,14 @@ import {
   validateInputFile,
   validateScenarioFile,
 } from '../src/core/engine.ts';
+import {
+  addLeaderboardEntry,
+  isValidPlayerName,
+  sortAndCapLeaderboard,
+} from '../src/core/leaderboard.ts';
 import { PRNG } from '../src/core/prng.ts';
+import { runBenchmark } from '../src/headless/bench.ts';
+import { runSoakTest } from '../src/headless/soak.ts';
 
 describe('Core PRNG & Determinism Guardrails (Contract v1.2)', () => {
   it('produces identical sequence for identical seeds', () => {
@@ -380,3 +387,70 @@ describe('Phase 3 — TICKET-03 ("Đèn cạn dầu") & Test Contract v1.2 Featu
     expect(finalWorld.score).toBe(477);
   });
 });
+
+describe('Phase 4 — TICKET-04 ("Bình minh: phát hành v1.0.0") & Contract v1.3 Features', () => {
+  it('validates player names (3-12 chars), sorts leaderboard by score desc then achieved_at asc, and caps at Top 10', () => {
+    expect(isValidPlayerName('May')).toBe(true);
+    expect(isValidPlayerName('Khai_2A')).toBe(true);
+    expect(isValidPlayerName('Ab')).toBe(false); // < 3 chars
+    expect(isValidPlayerName('ThisNameIsWayTooLong123')).toBe(false); // > 12 chars
+    expect(isValidPlayerName('Bad Name!')).toBe(false); // invalid symbols
+
+    const entries = Array.from({ length: 12 }, (_, i) => ({
+      name: `Player_${i + 1}`,
+      score: i === 2 || i === 5 ? 3000 : (i + 1) * 200,
+      nights_won: 2,
+      achieved_at:
+        i === 5
+          ? '2026-04-20T10:00:00+07:00'
+          : i === 2
+            ? '2026-04-20T12:00:00+07:00'
+            : `2026-04-20T14:${String(i).padStart(2, '0')}:00+07:00`,
+      seed: 100 + i,
+    }));
+
+    const sorted = sortAndCapLeaderboard(entries);
+    expect(sorted.length).toBe(10);
+    // Player_6 and Player_3 both have score 3000, but Player_6 achieved it earlier (10:00 vs 12:00)
+    expect(sorted[0].name).toBe('Player_6');
+    expect(sorted[1].name).toBe('Player_3');
+
+    const updated = addLeaderboardEntry(
+      { entries: sorted },
+      {
+        name: 'May',
+        score: 4820,
+        nights_won: 3,
+        achieved_at: '2026-04-20T14:32:10+07:00',
+        seed: 1842901,
+      }
+    );
+    expect(updated.entries.length).toBe(10);
+    expect(updated.entries[0].name).toBe('May');
+    expect(updated.entries[0].score).toBe(4820);
+  });
+
+  it('runs headless soak test across consecutive Nights with 0 crashes and stable memory (mem_end_mb <= 1.2 * mem_start_mb)', () => {
+    const soakRes = runSoakTest({ seed: 7, nights: 3, out: 'soak.json' });
+    expect(soakRes.nights).toBe(3);
+    expect(soakRes.crashes).toBe(0);
+    expect(soakRes.results.length).toBe(3);
+    expect(soakRes.mem_end_mb).toBeLessThanOrEqual(Math.ceil(soakRes.mem_start_mb * 1.2));
+  });
+
+  it('runs benchmark scene (200 Ink Shadows, 100 Fireflies, L1-L3 lit) and satisfies Contract v1.3 thresholds', () => {
+    const benchRes = runBenchmark({
+      seed: 42,
+      duration: 0.4,
+      warmupSec: 0.1,
+      out: 'bench.json',
+    });
+    expect(benchRes.contract_version).toBe('1.3');
+    expect(benchRes.avg_fps).toBeGreaterThanOrEqual(60);
+    expect(benchRes.p1_low_fps).toBeGreaterThanOrEqual(30);
+    expect(benchRes.load_ms).toBeLessThanOrEqual(10000);
+    expect(benchRes.vsync_off).toBe(true);
+    expect(benchRes.frames).toBeGreaterThan(10);
+  });
+});
+

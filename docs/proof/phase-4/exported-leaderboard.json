@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {
+      "name": "May",
+      "score": 4820,
+      "nights_won": 3,
+      "achieved_at": "2026-04-20T14:32:10+07:00",
+      "seed": 1842901
+    },
+    {
+      "name": "CuDen",
+      "score": 3690,
+      "nights_won": 3,
+      "achieved_at": "2026-04-20T15:10:05+07:00",
+      "seed": 42
+    },
+    {
+      "name": "Khai_2A",
+      "score": 2540,
+      "nights_won": 2,
+      "achieved_at": "2026-04-20T16:00:00+07:00",
+      "seed": 202603664
+    }
+  ]
+}

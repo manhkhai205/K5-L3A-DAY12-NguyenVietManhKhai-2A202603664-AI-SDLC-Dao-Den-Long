@@ -1,8 +1,8 @@
 # Báo Cáo Kiểm Chứng Tự Động — Phase 4 (Test Contract v1.3)
 
-- **Thời điểm chạy (Timestamp):** `2026-11-20T10:50:10.553Z`
+- **Thời điểm chạy (Timestamp):** `2026-11-20T10:54:55.582Z`
 - **Cấu hình máy kiểm chứng:** `win32 10.0.26300 | 12th Gen Intel(R) Core(TM) i9-12900H | RAM 15.7 GB | Node v24.11.0`
-- **Thời gian chạy 2 lượt Headless:** `8.21 ms`
+- **Thời gian chạy 2 lượt Headless:** `7.07 ms`
 - **Kiểm tra tính tất định (Determinism Run 1 === Run 2):** **ĐẠT (PASSED - Byte-for-byte identical JSONL)**
 
 ---
@@ -25,14 +25,14 @@
 ```text
 [1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/workspace/VinAI/K5-L3A-DAY12-NguyenVietManhKhai-2A202603664-AI-SDLC-Dao-Den-Long[39m
 
- [32m✓[39m tests/core.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 963[2mms[22m[39m
-   [33m[2m✓[22m[39m Phase 4 — TICKET-04 ("Bình minh: phát hành v1.0.0") & Contract v1.3 Features[2m > [22mruns headless soak test across consecutive Nights in clean process with 0 crashes and stable memory (mem_end_mb <= 1.2 * mem_start_mb) [33m419[2mms[22m[39m
+ [32m✓[39m tests/core.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 957[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 4 — TICKET-04 ("Bình minh: phát hành v1.0.0") & Contract v1.3 Features[2m > [22mruns headless soak test across consecutive Nights in clean process with 0 crashes and stable memory (mem_end_mb <= 1.2 * mem_start_mb) [33m416[2mms[22m[39m
    [33m[2m✓[22m[39m Phase 4 — TICKET-04 ("Bình minh: phát hành v1.0.0") & Contract v1.3 Features[2m > [22mruns benchmark scene (200 Ink Shadows, 100 Fireflies, L1-L3 lit) and satisfies Contract v1.3 thresholds [33m513[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
 [2m      Tests [22m [1m[32m15 passed[39m[22m[90m (15)[39m
-[2m   Start at [22m 17:50:07
-[2m   Duration [22m 1.67s[2m (transform 138ms, setup 0ms, collect 361ms, tests 963ms, environment 0ms, prepare 95ms)[22m
+[2m   Start at [22m 17:54:52
+[2m   Duration [22m 1.65s[2m (transform 121ms, setup 0ms, collect 343ms, tests 957ms, environment 0ms, prepare 108ms)[22m
 ```
 
 ---
@@ -74,8 +74,8 @@
     "lost",
     "lost"
   ],
-  "mem_start_mb": 82,
-  "mem_end_mb": 94,
+  "mem_start_mb": 81,
+  "mem_end_mb": 92,
   "duration_s": 0.2
 }
 ```

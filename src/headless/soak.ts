@@ -1,5 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { round1 } from '../core/config.ts';
 import {
   createDefaultInputState,
@@ -9,6 +11,20 @@ import {
 } from '../core/engine.ts';
 import { PRNG } from '../core/prng.ts';
 import type { SimWorld } from '../core/types.ts';
+
+function runGarbageCollection(): void {
+  try {
+    if (typeof globalThis.gc === 'function') {
+      globalThis.gc();
+      return;
+    }
+    v8.setFlagsFromString('--expose_gc');
+    const gcFn = vm.runInNewContext('gc') as (() => void) | undefined;
+    gcFn?.();
+  } catch {
+    // Ignore if environment disallows dynamic --expose_gc
+  }
+}
 
 export interface SoakOutput {
   nights: number;
@@ -66,6 +82,17 @@ export function runSoakTest(args: SoakArgs): SoakOutput {
   const results: Array<'won' | 'lost'> = [];
   let crashes = 0;
   let memStartMb = 0;
+
+  // Engine & V8 JIT warmup before loading Night 1 so JIT code-cache allocation does not skew Night 1 RSS baseline
+  {
+    const warm = createWorld({ seed: args.seed, night: 1, contractVersion: '1.3' });
+    const warmInput = createDefaultInputState();
+    for (let t = 0; t < 120; t++) {
+      stepWorld(warm.world, warm.prng, warmInput, { tick: t, move: [0, 1] });
+    }
+    resetWorldForReuse(warm.world);
+    runGarbageCollection();
+  }
 
   let currentWorld: SimWorld | null = null;
 
@@ -127,6 +154,7 @@ export function runSoakTest(args: SoakArgs): SoakOutput {
           interact: wantInteract,
           pause: false,
         });
+        currentWorld.events.length = 0;
       }
 
       const finalResult: 'won' | 'lost' = currentWorld.state === 'won' ? 'won' : 'lost';
@@ -142,6 +170,7 @@ export function runSoakTest(args: SoakArgs): SoakOutput {
     resetWorldForReuse(currentWorld);
     currentWorld = null;
   }
+  runGarbageCollection();
 
   const memEndMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
   const durationS = round1(Number(process.hrtime.bigint() - startNs) / 1_000_000_000);

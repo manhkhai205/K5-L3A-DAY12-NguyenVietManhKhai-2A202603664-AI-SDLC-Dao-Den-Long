@@ -74,7 +74,7 @@ npx tsx src/headless/soak.ts --seed 7 --nights 10 --out soak.json
 - Chạy headless **10 Đêm liên tiếp** trong cùng một tiến trình (`Đêm 1 -> 2 -> 3` xoay vòng, Đêm thứ `i` dùng `seed = 7 + i`), tự sinh input ngẫu nhiên theo seed (mỗi 30 tick chọn hướng mới; mỗi tick xác suất `5%` nhảy, `3%` lướt, `2%` tỏa sáng, `10%` tương tác).
 - **Kết quả đo thực tế trong [soak.json](soak.json):**
   - `crashes`: **`0`** (Ngưỡng đạt: `0`)
-  - `mem_start_mb`: **`82 MB`** -> `mem_end_mb`: **`94 MB`** (Tăng `14.6% <= 20%`, không rò rỉ bộ nhớ)
+  - `mem_start_mb`: **`81 MB`** -> `mem_end_mb`: **`92 MB`** (Tăng `13.6% <= 20%`, không rò rỉ bộ nhớ)
   - `duration_s`: **`0.2 s`**
 
 ### 3.4. Xuất Bảng Xếp Hạng Cục Bộ (`TICKET-04 Section 3`)

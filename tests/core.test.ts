@@ -1,4 +1,6 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -13,7 +15,7 @@ import {
 } from '../src/core/leaderboard.ts';
 import { PRNG } from '../src/core/prng.ts';
 import { runBenchmark } from '../src/headless/bench.ts';
-import { runSoakTest } from '../src/headless/soak.ts';
+import type { SoakOutput } from '../src/headless/soak.ts';
 
 describe('Core PRNG & Determinism Guardrails (Contract v1.2)', () => {
   it('produces identical sequence for identical seeds', () => {
@@ -428,13 +430,32 @@ describe('Phase 4 — TICKET-04 ("Bình minh: phát hành v1.0.0") & Contract v1
     expect(updated.entries.length).toBe(10);
     expect(updated.entries[0].name).toBe('May');
     expect(updated.entries[0].score).toBe(4820);
+
+    // Deduplicate identical records when merging localStorage & disk leaderboard.json
+    const deduped = sortAndCapLeaderboard([...updated.entries, ...updated.entries]);
+    expect(deduped.filter((e) => e.name === 'May' && e.score === 4820).length).toBe(1);
   });
 
-  it('runs headless soak test across consecutive Nights with 0 crashes and stable memory (mem_end_mb <= 1.2 * mem_start_mb)', () => {
-    const soakRes = runSoakTest({ seed: 7, nights: 3, out: 'soak.json' });
-    expect(soakRes.nights).toBe(3);
+  it('runs headless soak test across consecutive Nights in clean process with 0 crashes and stable memory (mem_end_mb <= 1.2 * mem_start_mb)', () => {
+    const tmpSoakOut = resolve(tmpdir(), `soak-test-${process.pid}.json`);
+    execFileSync(
+      process.execPath,
+      [
+        resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs'),
+        resolve(process.cwd(), 'src/headless/soak.ts'),
+        '--seed',
+        '7',
+        '--nights',
+        '5',
+        '--out',
+        tmpSoakOut,
+      ],
+      { stdio: 'pipe' }
+    );
+    const soakRes = JSON.parse(readFileSync(tmpSoakOut, 'utf-8')) as SoakOutput;
+    expect(soakRes.nights).toBe(5);
     expect(soakRes.crashes).toBe(0);
-    expect(soakRes.results.length).toBe(3);
+    expect(soakRes.results.length).toBe(5);
     expect(soakRes.mem_end_mb).toBeLessThanOrEqual(Math.ceil(soakRes.mem_start_mb * 1.2));
   });
 

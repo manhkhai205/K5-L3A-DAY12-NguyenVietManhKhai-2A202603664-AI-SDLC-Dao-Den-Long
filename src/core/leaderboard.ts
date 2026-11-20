@@ -47,7 +47,17 @@ export function sortAndCapLeaderboard(entries: LeaderboardEntry[]): LeaderboardE
       typeof e.seed === 'number'
   );
 
-  return [...valid]
+  const seen = new Set<string>();
+  const deduped: LeaderboardEntry[] = [];
+  for (const e of valid) {
+    const key = `${e.name.trim()}|${e.score}|${e.nights_won}|${e.achieved_at}|${e.seed}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push({ ...e, name: e.name.trim() });
+    }
+  }
+
+  return deduped
     .sort((a, b) => {
       if (b.score !== a.score) {
         return b.score - a.score;

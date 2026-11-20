@@ -1,16 +1,23 @@
 # Đảo Đèn Lồng (Lantern Island) — v1.0.0 (`Test Contract v1.3`)
 
+> 🎬 **Video Demo (< 5 phút, gồm chơi thử 3 Đêm + Accessibility + Kiểm chứng Headless/Bench/Soak & AI Harness):**  
+> 👉 [**Xem / Tải trực tiếp `demo.mp4` trên GitHub Release v1.0.0**](https://github.com/manhkhai205/K5-L3A-DAY12-NguyenVietManhKhai-2A202603664-AI-SDLC-Dao-Den-Long/releases/download/v1.0.0/demo.mp4) · [Trang Release v1.0.0](https://github.com/manhkhai205/K5-L3A-DAY12-NguyenVietManhKhai-2A202603664-AI-SDLC-Dao-Den-Long/releases/tag/v1.0.0)
+
 **Bài Lab Day 12 — AI-Augmented Software Development Lifecycle (AI SDLC)**  
 **Học viên:** Nguyễn Viết Mạnh Khải (`MSSV: 2A202603664`)  
 **Phiên bản phát hành:** `v1.0.0` · **Tag nộp:** `phase-1`, `phase-2`, `phase-3`, `phase-4`, `v1.0.0` · **Test Contract:** `v1.3`
 
 ---
 
-## 1. Giới Thiệu & Câu Chuyện
+## 1. Giới Thiệu, Câu Chuyện & Ảnh Chụp Thực Tế
 
 Trong **Đảo Đèn Lồng**, người chơi điều khiển **Mây** — người giữ đèn nhỏ tuổi đội chiếc nón lá có treo một chiếc đèn lồng nhỏ ấm áp giữa biển mây. Đêm nay sương đen đã nuốt hết ánh sáng của ba hòn đảo (**Đêm 1 – Đảo Bến**, **Đêm 2 – Đảo Cau**, **Đêm 3 – Đảo Chuông**).
 
 Mây phải chạy khắp đảo thu thập **Đom Đóm**, thắp sáng và liên tục **châm dầu** giữ các **Đèn Lồng Lớn** không bị tắt trước khi bình minh lên (`>= 60%` số đèn sáng khi hết giờ), đồng thời dùng kỹ năng **Lướt (Dash)** và **Tỏa Sáng (Pulse)** để xua đuổi **Bóng Mực** (sinh vật mực đen lao vào hút dầu đèn khi `fuel < 30`) và **Gió Lạc** (tinh linh gió chuyên cướp đom đóm).
+
+| Màn chơi 3D Đêm 1 — Đảo Bến | Cài Đặt, Đổi Phím & Dễ Tiếp Cận | Bảng Xếp Hạng Cục Bộ (Top 10) |
+|---|---|---|
+| ![Đêm 1 — Đảo Bến](docs/screenshots/gameplay-night1.png) | ![Cài đặt & Dễ tiếp cận](docs/screenshots/accessibility-settings.png) | ![Bảng xếp hạng cục bộ](docs/screenshots/leaderboard.png) |
 
 ---
 
@@ -51,7 +58,7 @@ npx tsx src/headless/bench.ts --seed 42 --duration 30 --out bench.json
 ```
 - Dựng cảnh Đêm 1 1280×720 (`vsync_off: true`) với đúng **200 Bóng Mực** (`wander`, rải đều theo `seed 42`), **100 Đom Đóm**, **3 đèn `L1–L3` đang sáng** (`fuel = 100`), Mây đứng yên tại `(0,0,0)`, camera bay vòng tròn bán kính `30 m`, cao `Y = 15 m`, nhìn vào `(0,0,0)`, ngược chiều kim đồng hồ `15 s/vòng`.
 - Khởi động `3 s` (không đo), sau đó đo đúng `--duration` giây và tự thoát với mã `0`.
-- Ngoài ra có thể xem trực quan cảnh benchmark 3D trên trình duyệt tại `http://localhost:5173/?bench=1`.
+- **Ghi chú về VSync (`vsync_off`):** Ở chế độ trình duyệt Web (`http://localhost:5173/?bench=1`), engine WebGL mặc định bị trình duyệt khóa theo VSync của hệ điều hành (trừ khi chạy Chrome với `--disable-gpu-vsync`). Vì vậy lệnh benchmark CLI `src/headless/bench.ts` chạy SceneGraph `Three.js` + Frustum Culling + Physics ở chế độ mở khóa tốc độ khung hình (`vsync_off: true`) để chạy độc lập và tự thoát trên mọi máy chấm.
 - **Kết quả đo thực tế trong [bench.json](bench.json):**
   - `avg_fps`: **`160.0`** (Ngưỡng đạt: `>= 60`)
   - `p1_low_fps`: **`158.8`** (Ngưỡng đạt: `>= 30`)

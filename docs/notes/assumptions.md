@@ -42,3 +42,19 @@ Tài liệu này ghi lại toàn bộ các **giả định cho những chỗ mơ
 | **5. Bản đồ Đêm 3 (Đảo Chuông), 3 Tầng & Gió Mạnh** | Đảo bán kính `45m` với 3 tầng (`Y=0`, `Y=3`, `Y=6`), 2 dốc nghiêng ở góc `30°` và `150°`, bục nhảy tại `(0,3,13)` lên tầng 2, tháp chuông bán kính `2m` ở tâm tầng 2, 7 đèn `L1..L7`. Mỗi `30s` (`1800 ticks`) có Gió Mạnh kéo dài `5s` (`300 ticks`) đẩy Mây `2 m/s`. | `tests/core.test.ts` (`Night 3 multi-tier elevation & wind`) |
 | **6. Tạm dừng (Pause `Esc/P`) & Chuỗi 3 Đêm** | Khi nhấn `pause: true`, trạng thái chuyển sang `"paused"`, phát sự kiện `paused {}`; trong khi tạm dừng `tick` vẫn tăng nhưng `sim_tick`, thời gian, hồi chiêu, spawn, TTL đứng yên hoàn toàn. Nhấn lần nữa phát `resumed {}` và tiếp tục. Giao diện hỗ trợ chuyển chuỗi 3 Đêm, lưu cài đặt âm lượng vào `localStorage`. | `scenarios/p2-pause.json` & `tests/core.test.ts` |
 | **7. Hiệu năng Headless (21.600 ticks)** | Chạy headless một Đêm đầy đủ (tối đa `21.600 ticks`) hoàn thành trong `<= 30 giây` (thực tế đạt `< 0.1 giây`). | `tests/core.test.ts` & `docs/proof/phase-2/verification-report.md` |
+
+---
+
+## Phase 3 — TICKET-03 ("Đèn cạn dầu") & Test Contract v1.2 (`tag: phase-3`)
+
+> Xem tài liệu quyết định kiến trúc chi tiết tại [ADR-001-phase3-lantern-fuel-and-dawn.md](ADR-001-phase3-lantern-fuel-and-dawn.md) và danh sách Breaking Changes tại [../../CHANGELOG.md](../../CHANGELOG.md).
+
+### 1. Bảng Đối Chiếu Luật Cũ Bị Thay Thế & Tiêu Chí Nghiệm Thu Mới (Ticket-03)
+
+| Luật cũ (Phase 1 & 2) | Luật mới thay thế trong `TICKET-03` (Contract v1.2) | Cách xử lý Thiết kế & Cập nhật Test cũ |
+|---|---|---|
+| Đèn đã sáng không nhận thêm đom đóm, sáng vĩnh viễn. | Đèn sáng có `fuel = 100` (`6000` đơn vị nguyên `1/60`), tự hao `1.0/s` ở Bước 2; tương tác đèn đang sáng (`fuel < 100`) để châm dầu (`refuel`, `+10 fuel`/đốm); khi `fuel <= 0` đèn tắt ngay sau Bước 2 (`lantern_out`, nhớ `ever_lit = true`), thắp lại chỉ tốn `5` đom đóm (`relight_cost: 5`, phát `lantern_lit { relight: true }`). | Lưu `fuelUnits` nguyên trong `LanternSim`; thêm scenario `scenarios/p3-fuel-relight.json` kiểm chứng chu trình hao dầu -> tắt đèn -> thắp lại 5 đốm -> châm dầu. |
+| Bóng Mực không bao giờ vào vùng an toàn `6m` của đèn sáng. | Đèn có `fuel < 30` mất vùng an toàn `6m`. Bóng Mực ở trạng thái `wander` chọn đèn sáng có `fuel < 30` gần nhất; khi cách `<= 2m` (XZ) chuyển sang `drain`, đứng yên hút `5 fuel/s` (`5/60` mỗi tick), phát `fuel_drain` mỗi 60 tick. Châm dầu lên `>= 30` đẩy Bóng Mực ra mép 6m trong 30 ticks. | Thêm hàm `hasActiveSafeZone(l)` và trạng thái `drain` trong `ShadeSim`; thêm scenario `scenarios/p3-shade-drain.json`. |
+| Thắng ngay khi tất cả đèn sáng (`reason: "all_lit"`). Thời gian 3 Đêm `300/330/360s`. | Không còn thắng sớm. Thời gian 3 Đêm `240/270/300s`. Thắng khi sống sót tới hết giờ (`time_left_s == 0`) và số đèn sáng `>= ceil(0.6 * total)` (`reason: "dawn_survived"`). | Cập nhật bài test `scenarios/smoke.json` trong `tests/core.test.ts` kèm comment giải thích lý do game vẫn ở `'playing'` sau khi thắp đủ 5 đèn ở tick 101; thêm scenario `scenarios/p3-dawn-win.json`. |
+| Sức chứa cố định `10`; công thức điểm cũ (`+10`/đốm, thưởng thời gian còn lại). | Sức chứa tăng dần `capacity = min(20, 10 + 2 * successful_lights)`. Điểm mới: `+5`/đốm nạp, `+100` thắp lần đầu, `+40` thắp lại, `+5` choáng thường / `+15` choáng khi đang `drain`, thưởng bình minh `+50 + floor(fuel)` mỗi đèn sáng + `+50` mỗi Ngọn Lửa còn lại. | Cập nhật `STANDARD_TUNING.score`, `computePlayerCapacity` và toàn bộ assertions điểm số trong `tests/core.test.ts`. |
+| Chưa có chế độ mù màu. | Thêm cài đặt "Bảng màu dễ phân biệt" (Colorblind Mode) lưu `localStorage`: viền/mắt Bóng Mực `#00B3FF`, cảnh báo UI `#FFFFFF` kèm `⚠`, đèn tắt xẹp `20%` kèm vết rách, thanh dầu 3D trên đèn nhấp nháy `1 Hz` khi `fuel < 30`. | Cập nhật `index.html`, `src/render/meshes.ts`, `src/render/hud.ts`, `src/render/main.ts`. |

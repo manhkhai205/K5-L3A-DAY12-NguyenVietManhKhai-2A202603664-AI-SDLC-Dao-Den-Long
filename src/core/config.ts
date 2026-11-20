@@ -4,19 +4,23 @@ export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const GRAVITY = -20.0;
 export const JUMP_SPEED = 7.0;
+export const FUEL_UNITS_PER_FUEL = 60; // 1 fuel = 60 integer units (1/60th precision)
+export const MAX_FUEL_UNITS = 100 * FUEL_UNITS_PER_FUEL; // 6000 units
 
 export const STANDARD_TUNING: TuningConfig = {
   player_speed: 6.0,
   carry_capacity: 10,
+  capacity_max: 20,
   lantern_cost: 10,
+  relight_cost: 5,
   lantern_count_night1: 5,
   pickup_radius: 1.0,
   interact_radius: 2.0,
   pulse_cost: 3,
   pulse_radius: 5.0,
-  night1_duration_s: 300,
-  night2_duration_s: 330,
-  night3_duration_s: 360,
+  night1_duration_s: 240,
+  night2_duration_s: 270,
+  night3_duration_s: 300,
   flames: 3,
   invuln_s: 1.5,
   hit_drop_ratio: 0.5,
@@ -30,14 +34,28 @@ export const STANDARD_TUNING: TuningConfig = {
   dash_speed: 14.0,
   dash_duration_s: 0.2,
   dash_cooldown_s: 1.5,
+  fuel_max: 100,
+  fuel_decay_per_s: 1.0,
+  fuel_per_mote: 10,
+  win_ratio: 0.6,
+  drain_per_s: 5,
+  low_fuel_threshold: 30,
   score: {
-    per_mote: 10,
+    per_mote: 5,
     per_lantern: 100,
+    per_relight: 40,
     per_stun: 5,
-    per_second_left: 2,
+    per_drain_stun: 15,
+    per_lit_at_dawn: 50,
+    per_second_left: 0,
     per_flame_left: 50,
   },
 };
+
+export function round1(n: number): number {
+  const r = Math.round(n * 10) / 10;
+  return Object.is(r, -0) ? 0 : r;
+}
 
 export function round3(n: number): number {
   const r = Math.round(n * 1000) / 1000;

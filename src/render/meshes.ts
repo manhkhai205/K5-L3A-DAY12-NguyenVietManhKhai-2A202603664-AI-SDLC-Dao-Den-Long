@@ -399,6 +399,9 @@ export function createGreatLanternMesh(safeRadius: number): {
   coreMesh: THREE.Mesh;
   light: THREE.PointLight;
   safeRing: THREE.Mesh;
+  fuelBarBg: THREE.Mesh;
+  fuelBarFill: THREE.Mesh;
+  tearBand: THREE.Mesh;
 } {
   const group = new THREE.Group();
 
@@ -420,9 +423,31 @@ export function createGreatLanternMesh(safeRadius: number): {
   coreMesh.position.y = 3.1;
   group.add(coreMesh);
 
+  // Tear mark on unlit lantern paper (Ticket-03 Section 6: unlit lantern squashed 20% + tear mark)
+  const tearMat = new THREE.MeshBasicMaterial({ color: 0x120a1a, side: THREE.DoubleSide });
+  const tearBand = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.12, 0.85), tearMat);
+  tearBand.position.y = 3.1;
+  tearBand.rotation.z = 0.35;
+  group.add(tearBand);
+
   const roof = new THREE.Mesh(new THREE.ConeGeometry(0.95, 0.65, 8), stoneMat);
   roof.position.y = 3.85;
   group.add(roof);
+
+  // 3D Fuel Bar above lantern roof (Ticket-03 Section 1)
+  const fuelBarBg = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.18, 0.08),
+    new THREE.MeshBasicMaterial({ color: 0x120a1a })
+  );
+  fuelBarBg.position.y = 4.55;
+  group.add(fuelBarBg);
+
+  const fuelBarFill = new THREE.Mesh(
+    new THREE.BoxGeometry(1.36, 0.14, 0.1),
+    new THREE.MeshBasicMaterial({ color: 0xffb347 })
+  );
+  fuelBarFill.position.y = 4.55;
+  group.add(fuelBarFill);
 
   const light = new THREE.PointLight(0xffb347, 0.2, safeRadius * 2.2);
   light.position.y = 3.1;
@@ -440,10 +465,10 @@ export function createGreatLanternMesh(safeRadius: number): {
   safeRing.position.y = 0.05;
   group.add(safeRing);
 
-  return { group, coreMesh, light, safeRing };
+  return { group, coreMesh, light, safeRing, fuelBarBg, fuelBarFill, tearBand };
 }
 
-export function createInkShadowMesh(): { group: THREE.Group; body: THREE.Mesh } {
+export function createInkShadowMesh(): { group: THREE.Group; body: THREE.Mesh; rim: THREE.Mesh } {
   const group = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({
     color: 0x120a1a,
@@ -455,19 +480,19 @@ export function createInkShadowMesh(): { group: THREE.Group; body: THREE.Mesh } 
   body.position.y = 0.85;
   group.add(body);
 
-  // Subtle purple rim aura (#7A3CFF)
+  // Subtle purple/cyan rim aura (#7A3CFF or #00B3FF in Colorblind Mode)
   const rimGeo = new THREE.SphereGeometry(0.88, 12, 12);
   const rimMat = new THREE.MeshBasicMaterial({
     color: 0x7a3cff,
     wireframe: true,
     transparent: true,
-    opacity: 0.25,
+    opacity: 0.3,
   });
   const rim = new THREE.Mesh(rimGeo, rimMat);
   rim.position.y = 0.85;
   group.add(rim);
 
-  return { group, body };
+  return { group, body, rim };
 }
 
 export function createDrifterMesh(): THREE.Mesh {

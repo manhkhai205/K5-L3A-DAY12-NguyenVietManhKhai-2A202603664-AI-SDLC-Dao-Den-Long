@@ -1,7 +1,9 @@
 import {
   DT,
+  FUEL_UNITS_PER_FUEL,
   GRAVITY,
   JUMP_SPEED,
+  MAX_FUEL_UNITS,
   NIGHT1_LANTERNS,
   NIGHT1_MOTE_SPAWNS,
   NIGHT1_SHADE_SPAWNS,
@@ -13,6 +15,7 @@ import {
   NIGHT3_LANTERNS,
   NIGHT3_MOTE_SPAWNS,
   NIGHT3_SHADE_SPAWNS,
+  round1,
   round3,
   roundVec3,
   STANDARD_TUNING,
@@ -66,7 +69,6 @@ export function getGroundHeight(night: 1 | 2 | 3, x: number, z: number, currentY
   const r = Math.sqrt(x * x + z * z);
   if (r > 45.0) return null;
 
-  // 2 straight ramps width 3m along radius at 30° and 150°: foot at r=30 (Y=0), top at r=24 (Y=3)
   for (const deg of [30, 150]) {
     const rad = (deg * Math.PI) / 180;
     const ux = Math.cos(rad);
@@ -81,12 +83,10 @@ export function getGroundHeight(night: 1 | 2 | 3, x: number, z: number, currentY
     }
   }
 
-  // Tier 2: disk radius <= 8m at Y=6 (vertical cliff wall: must already be near Y>=5.5)
   if (r <= 8.0 && currentY >= 5.5) {
     return 6.0;
   }
 
-  // Tier 1: half-annulus radius 12..24m, z > 0 at Y=3 (must already be near Y>=2.5)
   if (r >= 12.0 && r <= 24.0 && z > 0 && currentY >= 2.5) {
     return 3.0;
   }
@@ -113,7 +113,7 @@ export function getSpawnListsForNight(night: 1 | 2 | 3) {
       moteSpawns: NIGHT2_MOTE_SPAWNS,
       shadeSpawns: NIGHT2_SHADE_SPAWNS,
       charms: NIGHT2_CHARMS,
-      durationS: STANDARD_TUNING.night2_duration_s ?? 330,
+      durationS: STANDARD_TUNING.night2_duration_s,
       shadeIntervalTicks: 420, // 7s
       maxShades: 8,
       shadeSpeed: 4.0,
@@ -124,21 +124,33 @@ export function getSpawnListsForNight(night: 1 | 2 | 3) {
     moteSpawns: NIGHT3_MOTE_SPAWNS,
     shadeSpawns: NIGHT3_SHADE_SPAWNS,
     charms: NIGHT3_CHARMS,
-    durationS: STANDARD_TUNING.night3_duration_s ?? 360,
+    durationS: STANDARD_TUNING.night3_duration_s,
     shadeIntervalTicks: 360, // 6s
     maxShades: 10,
     shadeSpeed: 4.5,
   };
 }
 
+/**
+ * Checks whether a lantern currently provides an active 6m safe zone.
+ * In Phase 3 (Contract v1.2), a lit lantern only provides a safe zone if fuel >= 30 (fuelUnits >= 1800).
+ */
+export function hasActiveSafeZone(l: LanternSim): boolean {
+  return l.lit && l.fuelUnits >= STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL;
+}
+
+export function computePlayerCapacity(successfulLights: number): number {
+  return Math.min(STANDARD_TUNING.capacity_max, STANDARD_TUNING.carry_capacity + 2 * successfulLights);
+}
+
 export function createWorld(options: {
   seed: number;
   night?: 1 | 2 | 3;
   scenario?: ScenarioFile;
-  contractVersion?: '1.0' | '1.1';
+  contractVersion?: '1.0' | '1.1' | '1.2';
 }): { world: SimWorld; prng: PRNG } {
   const night = options.night ?? 1;
-  const contractVersion = options.contractVersion ?? '1.0';
+  const contractVersion = options.contractVersion ?? '1.2';
   const prng = new PRNG(options.seed);
   const nightInfo = getSpawnListsForNight(night);
   const sc = options.scenario;
@@ -152,12 +164,28 @@ export function createWorld(options: {
     pos: [...l.pos] as Vec3Tuple,
     lit: false,
     deposited: 0,
+    fuelUnits: 0,
+    everLit: false,
+    relitCount: 0,
     justLitTicks: 0,
   }));
 
   if (sc?.lanterns) {
     for (const override of sc.lanterns) {
-      const target = lanterns.find((l) => l.id === override.id);
+      let target = lanterns.find((l) => l.id === override.id);
+      if (!target && override.pos) {
+        target = {
+          id: override.id,
+          pos: roundVec3(override.pos),
+          lit: false,
+          deposited: 0,
+          fuelUnits: 0,
+          everLit: false,
+          relitCount: 0,
+          justLitTicks: 0,
+        };
+        lanterns.push(target);
+      }
       if (target) {
         if (override.pos) target.pos = roundVec3(override.pos);
         if (override.deposited !== undefined) target.deposited = override.deposited;
@@ -166,14 +194,18 @@ export function createWorld(options: {
         } else if (target.deposited >= STANDARD_TUNING.lantern_cost) {
           target.lit = true;
         }
-      } else if (override.pos) {
-        lanterns.push({
-          id: override.id,
-          pos: roundVec3(override.pos),
-          deposited: override.deposited ?? 0,
-          lit: override.lit ?? (override.deposited ?? 0) >= STANDARD_TUNING.lantern_cost,
-          justLitTicks: 0,
-        });
+        if (target.lit) {
+          const fuelVal = override.fuel !== undefined ? override.fuel : 100;
+          target.fuelUnits = Math.round(fuelVal * FUEL_UNITS_PER_FUEL);
+          target.everLit = override.ever_lit !== undefined ? override.ever_lit : true;
+        } else {
+          target.fuelUnits =
+            override.fuel !== undefined ? Math.round(override.fuel * FUEL_UNITS_PER_FUEL) : 0;
+          target.everLit = override.ever_lit ?? false;
+        }
+        if (override.relit_count !== undefined) {
+          target.relitCount = override.relit_count;
+        }
       }
     }
   }
@@ -241,6 +273,9 @@ export function createWorld(options: {
         pushTicksLeft: 0,
         pushStepXZ: [0, 0],
         wanderAngle: Math.atan2(-s.pos[2], -s.pos[0]),
+        targetLanternId: s.target_lantern_id ?? null,
+        drainTicks: 0,
+        wasDrainingTick: -10,
       });
     }
   }
@@ -286,6 +321,7 @@ export function createWorld(options: {
         }));
 
   const playerPos: Vec3Tuple = sc?.player?.pos ? roundVec3(sc.player.pos) : [0, 0, 0];
+  const successfulLights = sc?.player?.successful_lights ?? 0;
 
   const world: SimWorld = {
     contractVersion,
@@ -304,9 +340,11 @@ export function createWorld(options: {
     player: {
       pos: playerPos,
       vel: [0, 0, 0],
-      facingDir: [0, 1], // Facing +Z initially
+      facingDir: [0, 1],
       flames: sc?.player?.flames ?? STANDARD_TUNING.flames,
       carried: sc?.player?.carried ?? 0,
+      capacity: computePlayerCapacity(successfulLights),
+      successfulLights,
       grounded: true,
       invulnTicks: sc?.player?.invuln_ticks ?? 0,
       dashCdTicks: sc?.player?.dash_cd_ticks ?? 0,
@@ -364,7 +402,40 @@ export function createDefaultInputState(): PersistentInputState {
 }
 
 /**
- * Executes a single tick k -> k+1 following the exact 12-step order in Ticket-02 & Contract v1.0/v1.1.
+ * Helper to select target lantern for a wandering shade (Ticket-03 Section 2):
+ * Priority 1: Nearest lit lantern with fuel < 30 (tie-breaker: smaller id).
+ * Priority 2: Nearest unlit lantern (tie-breaker: smaller id).
+ */
+function findTargetLanternForShade(shade: ShadeSim, lanterns: LanternSim[]): LanternSim | null {
+  const weakLit = lanterns.filter(
+    (l) => l.lit && l.fuelUnits < STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL
+  );
+  if (weakLit.length > 0) {
+    weakLit.sort((a, b) => {
+      const da = distXZ(shade.pos, a.pos);
+      const db = distXZ(shade.pos, b.pos);
+      if (Math.abs(da - db) > 1e-6) return da - db;
+      return a.id.localeCompare(b.id);
+    });
+    return weakLit[0];
+  }
+
+  const unlit = lanterns.filter((l) => !l.lit);
+  if (unlit.length > 0) {
+    unlit.sort((a, b) => {
+      const da = distXZ(shade.pos, a.pos);
+      const db = distXZ(shade.pos, b.pos);
+      if (Math.abs(da - db) > 1e-6) return da - db;
+      return a.id.localeCompare(b.id);
+    });
+    return unlit[0];
+  }
+
+  return null;
+}
+
+/**
+ * Executes a single tick k -> k+1 following the exact 12-step order in Ticket-02 & Ticket-03 (Contract v1.2).
  */
 export function stepWorld(
   world: SimWorld,
@@ -416,13 +487,13 @@ export function stepWorld(
   if (pauseTriggered) {
     if (world.state === 'playing') {
       world.state = 'paused';
-      if (world.contractVersion === '1.1') {
+      if (world.contractVersion !== '1.0') {
         emit('paused', {});
       }
       return tickEvents;
     } else if (world.state === 'paused') {
       world.state = 'playing';
-      if (world.contractVersion === '1.1') {
+      if (world.contractVersion !== '1.0') {
         emit('resumed', {});
       }
     }
@@ -435,6 +506,8 @@ export function stepWorld(
   world.simTick += 1;
 
   // Step 2: Decrement timers (time, cooldowns, invuln, stun, charm, dropped mote TTL, charm respawn)
+  // AND Ticket-03 addition: subtract lantern fuel (1/60 natural decay + 5/60 per draining shade);
+  // immediately after Step 2, lanterns with fuel <= 0 turn off and emit lantern_out.
   if (world.timeLeftTicks > 0) world.timeLeftTicks -= 1;
   if (world.player.invulnTicks > 0) world.player.invulnTicks -= 1;
   if (world.player.dashCdTicks > 0) world.player.dashCdTicks -= 1;
@@ -464,7 +537,44 @@ export function stepWorld(
     if (l.justLitTicks > 0) l.justLitTicks -= 1;
   }
 
-  // Wind schedule on Night 3 (every 30s = 1800 ticks, active for 5s = 300 ticks, warning 2s = 120 ticks before)
+  // Ticket-03 Step 2 Fuel Decay & Shade Drain
+  for (const l of world.lanterns) {
+    if (!l.lit) continue;
+    // Natural decay: 1.0 fuel/sec = 1 fuelUnit per tick
+    l.fuelUnits = Math.max(0, l.fuelUnits - 1);
+
+    // Check shades currently in 'drain' state targeting this lantern (within 2m XZ)
+    const drainingShades = world.shades
+      .filter((s) => s.state === 'drain' && distXZ(s.pos, l.pos) <= 2.0)
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    for (const s of drainingShades) {
+      // 5 fuel/sec = 5 fuelUnits per tick
+      l.fuelUnits = Math.max(0, l.fuelUnits - 5);
+      s.drainTicks += 1;
+      if (s.drainTicks % 60 === 0 && world.contractVersion === '1.2') {
+        emit('fuel_drain', {
+          lantern_id: l.id,
+          shade_id: s.id,
+          fuel: round1(l.fuelUnits / FUEL_UNITS_PER_FUEL),
+        });
+      }
+    }
+
+    // Immediately after Step 2: if fuel <= 0, lantern turns off
+    if (l.fuelUnits <= 0) {
+      l.fuelUnits = 0;
+      l.lit = false;
+      l.deposited = 0;
+      l.everLit = true;
+      l.justLitTicks = 0;
+      if (world.contractVersion === '1.2') {
+        emit('lantern_out', { lantern_id: l.id });
+      }
+    }
+  }
+
+  // Wind schedule on Night 3
   if (world.wind.enabled) {
     const cycle = world.simTick % 1800;
     if (cycle === 1800 - 120) {
@@ -488,11 +598,9 @@ export function stepWorld(
       p.vel = [0, 0, 0];
       p.grounded = true;
       p.jumpPadLocked = false;
-      p.invulnTicks = Math.round(world.tuning.invuln_s * TICK_RATE); // 90 ticks
+      p.invulnTicks = Math.round(world.tuning.invuln_s * TICK_RATE);
     }
   } else {
-    // Convert camera yaw input move [x, z] to world direction:
-    // Contract C: x' = x*cos(theta) + z*sin(theta), z' = -x*sin(theta) + z*cos(theta)
     let mx = Math.max(-1, Math.min(1, prevInput.move[0]));
     let mz = Math.max(-1, Math.min(1, prevInput.move[1]));
     const len = Math.sqrt(mx * mx + mz * mz);
@@ -509,18 +617,16 @@ export function stepWorld(
       p.facingDir = [worldDirX / dirMag, worldDirZ / dirMag];
     }
 
-    // Trigger Dash (14 m/s for 0.2s = 12 ticks, cooldown 1.5s = 90 ticks; no cooldown when charm active)
     if (dashTriggered && p.dashActiveTicks === 0 && (p.dashCdTicks === 0 || p.charmTicks > 0)) {
-      p.dashActiveTicks = Math.round((world.tuning.dash_duration_s ?? 0.2) * TICK_RATE); // 12 ticks
-      p.dashCdTicks = p.charmTicks > 0 ? 0 : Math.round((world.tuning.dash_cooldown_s ?? 1.5) * TICK_RATE);
+      p.dashActiveTicks = Math.round(world.tuning.dash_duration_s * TICK_RATE);
+      p.dashCdTicks = p.charmTicks > 0 ? 0 : Math.round(world.tuning.dash_cooldown_s * TICK_RATE);
       p.dashDir = dirMag > 0.0001 ? [worldDirX / dirMag, worldDirZ / dirMag] : [...p.facingDir];
       p.jumpPadLocked = false;
-      if (world.contractVersion === '1.1') {
+      if (world.contractVersion !== '1.0') {
         emit('dash', {});
       }
     }
 
-    // Trigger Jump
     if (jumpTriggered && p.grounded && p.dashActiveTicks === 0) {
       p.vel[1] = JUMP_SPEED;
       p.grounded = false;
@@ -530,10 +636,9 @@ export function stepWorld(
 
     if (p.dashActiveTicks > 0) {
       p.dashActiveTicks -= 1;
-      const dashSpeed = world.tuning.dash_speed ?? 14.0;
-      p.vel[0] = p.dashDir[0] * dashSpeed;
-      p.vel[2] = p.dashDir[1] * dashSpeed;
-      p.vel[1] = 0; // Dash in air keeps height constant
+      p.vel[0] = p.dashDir[0] * world.tuning.dash_speed;
+      p.vel[2] = p.dashDir[1] * world.tuning.dash_speed;
+      p.vel[1] = 0;
     } else if (p.jumpPadLocked) {
       p.vel[0] = p.jumpPadVel[0];
       p.vel[2] = p.jumpPadVel[1];
@@ -548,7 +653,6 @@ export function stepWorld(
       }
     }
 
-    // Add wind push (2 m/s) on Night 3 if active
     if (world.wind.active) {
       const wRad = (world.wind.dirDeg * Math.PI) / 180;
       p.vel[0] += 2.0 * Math.cos(wRad);
@@ -559,7 +663,6 @@ export function stepWorld(
     let nextY = p.pos[1] + p.vel[1] * DT;
     let nextZ = p.pos[2] + p.vel[2] * DT;
 
-    // Bell tower obstacle at center of Tier 2 on Night 3 (radius 2m at (0,6,0), height 8m)
     if (world.night === 3 && nextY >= 5.5 && nextY <= 14.0) {
       const rCenter = Math.sqrt(nextX * nextX + nextZ * nextZ);
       if (rCenter < 2.0 && rCenter > 0.0001) {
@@ -570,7 +673,6 @@ export function stepWorld(
 
     const groundY = getGroundHeight(world.night, nextX, nextZ, p.pos[1]);
 
-    // Check tier cliff blocking on Night 3 (cannot walk up vertical cliff walls)
     if (groundY !== null && groundY > p.pos[1] + 0.6 && p.grounded) {
       nextX = p.pos[0];
       nextZ = p.pos[2];
@@ -584,7 +686,6 @@ export function stepWorld(
         p.grounded = false;
       }
     } else {
-      // Off island edge -> falling
       p.grounded = false;
       if (p.dashActiveTicks === 0 && p.vel[1] === 0) {
         p.vel[1] += GRAVITY * DT;
@@ -595,7 +696,7 @@ export function stepWorld(
     p.pos = roundVec3([nextX, nextY, nextZ]);
     p.vel = roundVec3(p.vel);
 
-    // Check Jump Pads
+    // Jump pads
     if (world.night === 2 && p.grounded) {
       if (distXZ(p.pos, [20, 0, 18]) <= 1.0) {
         const dx = 70 - p.pos[0];
@@ -623,13 +724,13 @@ export function stepWorld(
       }
     }
 
-    // Check fall off island (Y < -10)
+    // Fall off island (Y < -10)
     if (world.tuning.fall_enabled && p.pos[1] < -10.0) {
       const lost = p.carried;
       p.flames = Math.max(0, p.flames - 1);
       p.carried = 0;
       p.vel = [0, 0, 0];
-      if (world.contractVersion === '1.1') {
+      if (world.contractVersion !== '1.0') {
         emit('player_hit', { by: 'fall', flames: p.flames, dropped: 0, lost });
       } else {
         emit('player_hit', { by: 'fall', flames: p.flames, dropped: 0 });
@@ -642,10 +743,10 @@ export function stepWorld(
 
   const playerActive = p.respawnWaitTicks === 0 && p.flames > 0;
 
-  // Step 4: Pick up motes and charms
+  // Step 4: Pick up motes (respecting dynamic capacity) and charms
   if (playerActive) {
     for (let i = 0; i < world.motes.length; i++) {
-      if (p.carried >= world.tuning.carry_capacity) break;
+      if (p.carried >= p.capacity) break;
       const m = world.motes[i];
       if (
         distXZ(p.pos, m.pos) <= world.tuning.pickup_radius &&
@@ -668,18 +769,22 @@ export function stepWorld(
         c.respawnTicks = 2700;
         p.charmTicks = 600;
         p.dashCdTicks = 0;
-        if (world.contractVersion === '1.1') {
+        if (world.contractVersion !== '1.0') {
           emit('charm_picked', { charm_id: c.id, charm_ticks: 600 });
         }
       }
     }
   }
 
-  // Step 5: Interact with Great Lanterns
+  // Step 5: Interact with Great Lanterns (Ticket-03: deposit to unlit OR refuel lit lantern with fuel < 100)
   if (playerActive && interactTriggered && p.carried > 0) {
+    // Only consider lanterns within 2.0m that can receive motes (unlit, or lit with fuelUnits < MAX_FUEL_UNITS)
     const candidates = world.lanterns.filter(
-      (l) => !l.lit && distXZ(p.pos, l.pos) <= world.tuning.interact_radius
+      (l) =>
+        distXZ(p.pos, l.pos) <= world.tuning.interact_radius &&
+        (!l.lit || l.fuelUnits < MAX_FUEL_UNITS)
     );
+
     if (candidates.length > 0) {
       candidates.sort((a, b) => {
         const da = distXZ(p.pos, a.pos);
@@ -688,33 +793,80 @@ export function stepWorld(
         return a.id.localeCompare(b.id);
       });
       const target = candidates[0];
-      const needed = world.tuning.lantern_cost - target.deposited;
-      const amount = Math.min(p.carried, needed);
-      if (amount > 0) {
-        p.carried -= amount;
-        target.deposited += amount;
-        world.score += amount * world.tuning.score.per_mote;
-        emit('deposit', {
-          lantern_id: target.id,
-          amount,
-          deposited: target.deposited,
-        });
-        if (target.deposited >= world.tuning.lantern_cost) {
-          target.lit = true;
-          target.justLitTicks = 30;
-          world.score += world.tuning.score.per_lantern;
-          emit('lantern_lit', { lantern_id: target.id });
+
+      if (!target.lit) {
+        // Lighting an unlit lantern (first time needs 10, relight if everLit needs 5)
+        const cost = target.everLit ? world.tuning.relight_cost : world.tuning.lantern_cost;
+        const needed = cost - target.deposited;
+        const amount = Math.min(p.carried, needed);
+        if (amount > 0) {
+          const isRelight = target.everLit;
+          p.carried -= amount;
+          target.deposited += amount;
+          world.score += amount * world.tuning.score.per_mote;
+          emit('deposit', {
+            lantern_id: target.id,
+            amount,
+            deposited: target.deposited,
+          });
+          if (target.deposited >= cost) {
+            target.lit = true;
+            target.fuelUnits = MAX_FUEL_UNITS;
+            target.everLit = true;
+            target.justLitTicks = 30;
+            if (isRelight) {
+              target.relitCount += 1;
+              world.score += world.tuning.score.per_relight;
+            } else {
+              world.score += world.tuning.score.per_lantern;
+            }
+            p.successfulLights += 1;
+            p.capacity = computePlayerCapacity(p.successfulLights);
+            emit('lantern_lit', { lantern_id: target.id, relight: isRelight });
+          }
+        }
+      } else {
+        // Refueling an already-lit lantern (fuelUnits < 6000)
+        // used = min(carried, ceil((100 - fuel) / 10)) = min(carried, ceil((6000 - fuelUnits) / 600))
+        const missingUnits = MAX_FUEL_UNITS - target.fuelUnits;
+        const maxMotesNeeded = Math.ceil(missingUnits / (10 * FUEL_UNITS_PER_FUEL));
+        const used = Math.min(p.carried, maxMotesNeeded);
+        if (used > 0) {
+          const wasLowFuel =
+            target.fuelUnits < STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL;
+          p.carried -= used;
+          target.fuelUnits = Math.min(
+            MAX_FUEL_UNITS,
+            target.fuelUnits + used * 10 * FUEL_UNITS_PER_FUEL
+          );
+          world.score += used * world.tuning.score.per_mote;
+          const nowHasSafeZone =
+            target.fuelUnits >= STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL;
+          if (wasLowFuel && nowHasSafeZone) {
+            // Refueled to >= 30 while shades may be inside 6m -> push out over 30 ticks without dealing damage
+            target.justLitTicks = 30;
+          }
+          emit('refuel', {
+            lantern_id: target.id,
+            amount: used,
+            fuel: round1(target.fuelUnits / FUEL_UNITS_PER_FUEL),
+          });
         }
       }
     }
   }
 
-  // Step 6: Update safe zones (push shades out of newly lit lanterns over up to 30 ticks)
+  // Step 6: Update safe zones (only lanterns with active safe zone: lit && fuel >= 30)
   for (const l of world.lanterns) {
-    if (!l.lit) continue;
+    if (!hasActiveSafeZone(l)) continue;
     for (const s of world.shades) {
       const d = distXZ(s.pos, l.pos);
       if (d < world.tuning.safe_radius) {
+        // If shade was draining this lantern and it got refueled >= 30, transition to wander
+        if (s.state === 'drain') {
+          s.state = 'wander';
+          s.drainTicks = 0;
+        }
         const dx = s.pos[0] - l.pos[0];
         const dz = s.pos[2] - l.pos[2];
         const len = Math.sqrt(dx * dx + dz * dz);
@@ -734,7 +886,7 @@ export function stepWorld(
     }
   }
 
-  // Step 7: Pulse (Tỏa Sáng)
+  // Step 7: Pulse (Tỏa Sáng) — Ticket-03: +5 per shade stunned, +15 total if it was in 'drain' state right before
   if (
     playerActive &&
     pulseTriggered &&
@@ -742,14 +894,17 @@ export function stepWorld(
     p.carried >= world.tuning.pulse_cost
   ) {
     p.carried -= world.tuning.pulse_cost;
-    p.pulseCdTicks = Math.round(world.tuning.pulse_cooldown_s * TICK_RATE); // 180 ticks
+    p.pulseCdTicks = Math.round(world.tuning.pulse_cooldown_s * TICK_RATE);
     const pulseCenter: Vec3Tuple = [p.pos[0], p.pos[1] + 0.8, p.pos[2]];
     const stunnedIds: string[] = [];
 
     for (const s of world.shades) {
       if (dist3D(pulseCenter, s.pos) <= world.tuning.pulse_radius) {
+        const wasDraining =
+          s.state === 'drain' || world.simTick - s.wasDrainingTick <= 15;
         s.state = 'stunned';
-        s.stateTicksLeft = Math.round(world.tuning.pulse_stun_s * TICK_RATE); // 120 ticks
+        s.drainTicks = 0;
+        s.stateTicksLeft = Math.round(world.tuning.pulse_stun_s * TICK_RATE);
         s.pushTicksLeft = 15;
         const dx = s.pos[0] - p.pos[0];
         const dz = s.pos[2] - p.pos[2];
@@ -759,11 +914,12 @@ export function stepWorld(
         const stepDist = world.tuning.pulse_push_m / 15;
         s.pushStepXZ = [ux * stepDist, uz * stepDist];
         stunnedIds.push(s.id);
-        world.score += world.tuning.score.per_stun;
+        world.score += wasDraining
+          ? world.tuning.score.per_drain_stun
+          : world.tuning.score.per_stun;
       }
     }
 
-    // Pulse against Drifters (Gió Lạc)
     for (const d of world.drifters) {
       if (d.state === 'removed') continue;
       if (dist3D(pulseCenter, d.pos) <= world.tuning.pulse_radius) {
@@ -787,7 +943,7 @@ export function stepWorld(
           }
           d.stolen = 0;
           d.stateTicksLeft = 120;
-          if (world.contractVersion === '1.1') {
+          if (world.contractVersion !== '1.0') {
             emit('drifter_drop', { drifter_id: d.id, amount: dropCount });
           }
         }
@@ -797,7 +953,7 @@ export function stepWorld(
     emit('pulse', { stunned_ids: stunnedIds });
   }
 
-  // Step 8: Move Ink Shadows (Bóng Mực) and Drifters (Gió Lạc)
+  // Step 8: Move Ink Shadows (Bóng Mực — including Ticket-03 drain behavior) and Drifters (Gió Lạc)
   for (const s of world.shades) {
     if (s.state === 'spawning') {
       s.stateTicksLeft -= 1;
@@ -839,12 +995,46 @@ export function stepWorld(
       continue;
     }
 
-    // Check detection / drop chase radius (12m / 18m)
     const dToPlayer = distXZ(s.pos, p.pos);
     const playerInLitSafeZone = world.lanterns.some(
-      (l) => l.lit && distXZ(p.pos, l.pos) < world.tuning.safe_radius
+      (l) => hasActiveSafeZone(l) && distXZ(p.pos, l.pos) < world.tuning.safe_radius
     );
 
+    // Handle 'drain' state transitions (Ticket-03 Section 2):
+    // From drain -> chase if Mây enters within 6m; -> wander if lantern turns off, fuel >= 30, or dist > 2m.
+    if (s.state === 'drain') {
+      s.wasDrainingTick = world.simTick;
+      if (playerActive && !playerInLitSafeZone && dToPlayer <= 6.0) {
+        s.state = 'chase';
+        s.drainTicks = 0;
+      } else {
+        const targetL =
+          (s.targetLanternId
+            ? world.lanterns.find((l) => l.id === s.targetLanternId)
+            : null) ??
+          world.lanterns.find(
+            (l) =>
+              l.lit &&
+              l.fuelUnits < STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL &&
+              distXZ(s.pos, l.pos) <= 2.0
+          );
+
+        if (
+          !targetL ||
+          !targetL.lit ||
+          targetL.fuelUnits >= STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL ||
+          distXZ(s.pos, targetL.pos) > 2.0
+        ) {
+          s.state = 'wander';
+          s.drainTicks = 0;
+        } else {
+          // Stay still while draining
+          continue;
+        }
+      }
+    }
+
+    // Standard detection / drop chase radius (12m / 18m)
     if (playerActive && !playerInLitSafeZone) {
       if (s.state === 'wander' && dToPlayer <= 12.0) {
         s.state = 'chase';
@@ -861,24 +1051,44 @@ export function stepWorld(
       const candX = s.pos[0] + ux * world.tuning.shade_speed * DT;
       const candZ = s.pos[2] + uz * world.tuning.shade_speed * DT;
       const blockedBySafeZone = world.lanterns.some(
-        (l) => l.lit && distXZ([candX, s.pos[1], candZ], l.pos) < world.tuning.safe_radius
+        (l) => hasActiveSafeZone(l) && distXZ([candX, s.pos[1], candZ], l.pos) < world.tuning.safe_radius
       );
       if (!blockedBySafeZone) {
         s.pos = roundVec3([candX, s.pos[1], candZ]);
       }
     } else if (s.state === 'wander') {
-      // Gentle patrol movement in wander state (1.5 m/s) while staying on island & outside safe zones
-      const wanderSpeed = 1.5;
-      const candX = s.pos[0] + Math.cos(s.wanderAngle) * wanderSpeed * DT;
-      const candZ = s.pos[2] + Math.sin(s.wanderAngle) * wanderSpeed * DT;
-      const onIsland = getGroundHeight(world.night, candX, candZ, s.pos[1]) !== null;
-      const blockedBySafeZone = world.lanterns.some(
-        (l) => l.lit && distXZ([candX, s.pos[1], candZ], l.pos) < world.tuning.safe_radius
-      );
-      if (onIsland && !blockedBySafeZone) {
-        s.pos = roundVec3([candX, s.pos[1], candZ]);
-      } else {
-        s.wanderAngle += Math.PI * 0.75;
+      // Ticket-03 Section 2: Only shades in 'wander' choose weak lanterns (fuel < 30 nearest, tie id smaller),
+      // otherwise head toward nearest unlit lantern.
+      const targetL = findTargetLanternForShade(s, world.lanterns);
+      if (targetL) {
+        s.targetLanternId = targetL.id;
+        const isWeakLit =
+          targetL.lit &&
+          targetL.fuelUnits < STANDARD_TUNING.low_fuel_threshold * FUEL_UNITS_PER_FUEL;
+        const distToL = distXZ(s.pos, targetL.pos);
+
+        if (isWeakLit && distToL <= 2.0) {
+          s.state = 'drain';
+          s.drainTicks = 0;
+        } else if (distToL > 0.0001) {
+          const ux = (targetL.pos[0] - s.pos[0]) / distToL;
+          const uz = (targetL.pos[2] - s.pos[2]) / distToL;
+          const candX = s.pos[0] + ux * world.tuning.shade_speed * DT;
+          const candZ = s.pos[2] + uz * world.tuning.shade_speed * DT;
+          const blockedBySafeZone = world.lanterns.some(
+            (l) =>
+              hasActiveSafeZone(l) &&
+              distXZ([candX, s.pos[1], candZ], l.pos) < world.tuning.safe_radius
+          );
+          if (!blockedBySafeZone) {
+            s.pos = roundVec3([candX, s.pos[1], candZ]);
+          }
+          // Check if reached <= 2m of weak lit lantern after moving
+          if (isWeakLit && distXZ(s.pos, targetL.pos) <= 2.0) {
+            s.state = 'drain';
+            s.drainTicks = 0;
+          }
+        }
       }
     }
   }
@@ -900,7 +1110,6 @@ export function stepWorld(
       const uz = (p.pos[2] - d.pos[2]) / distP;
       d.pos = roundVec3([d.pos[0] + ux * 7.0 * DT, d.pos[1], d.pos[2] + uz * 7.0 * DT]);
     } else if (d.state === 'idle') {
-      // Ticket-02: idle (glides slowly at 2 m/s)
       const candX = d.pos[0] + Math.cos(d.wanderAngle) * 2.0 * DT;
       const candZ = d.pos[2] + Math.sin(d.wanderAngle) * 2.0 * DT;
       if (getGroundHeight(world.night, candX, candZ, d.pos[1]) !== null) {
@@ -934,7 +1143,7 @@ export function stepWorld(
         d.hasStolenOnce = true;
         d.state = 'flee';
         d.stateTicksLeft = 240;
-        if (world.contractVersion === '1.1') {
+        if (world.contractVersion !== '1.0') {
           emit('drifter_steal', {
             drifter_id: d.id,
             amount: stealAmt,
@@ -948,7 +1157,7 @@ export function stepWorld(
     for (const s of sortedShades) {
       if (s.state === 'stunned' || s.state === 'recoil' || s.state === 'spawning') continue;
       const insidePushZone = world.lanterns.some(
-        (l) => l.lit && l.justLitTicks > 0 && distXZ(s.pos, l.pos) <= world.tuning.safe_radius
+        (l) => hasActiveSafeZone(l) && l.justLitTicks > 0 && distXZ(s.pos, l.pos) <= world.tuning.safe_radius
       );
       if (insidePushZone) continue;
 
@@ -978,10 +1187,10 @@ export function stepWorld(
           });
         }
 
-        p.invulnTicks = Math.round(world.tuning.invuln_s * TICK_RATE); // 90 ticks
+        p.invulnTicks = Math.round(world.tuning.invuln_s * TICK_RATE);
 
-        // Shade recoils 2m over 60 ticks
         s.state = 'recoil';
+        s.drainTicks = 0;
         s.stateTicksLeft = 60;
         s.pushTicksLeft = 60;
         const dx = s.pos[0] - p.pos[0];
@@ -992,12 +1201,12 @@ export function stepWorld(
         s.pushStepXZ = [(ux * 2.0) / 60, (uz * 2.0) / 60];
 
         emit('player_hit', { by: 'shade', flames: p.flames, dropped: dropCount });
-        break; // Max 1 flame loss per tick
+        break;
       }
     }
   }
 
-  // Step 10: Scheduled spawns (motes, shades, drifters — interactable from next tick)
+  // Step 10: Scheduled spawns
   const nightInfo = getSpawnListsForNight(world.night);
 
   if (world.randomMotes && world.simTick > 0 && world.simTick % 240 === 0 && world.motes.length < 30) {
@@ -1027,7 +1236,7 @@ export function stepWorld(
         const validSpawns = nightInfo.shadeSpawns.filter(
           (sp) =>
             distXZ(sp, p.pos) >= 15.0 &&
-            !world.lanterns.some((l) => l.lit && distXZ(sp, l.pos) < world.tuning.safe_radius)
+            !world.lanterns.some((l) => hasActiveSafeZone(l) && distXZ(sp, l.pos) < world.tuning.safe_radius)
         );
         if (validSpawns.length > 0) {
           const sp = validSpawns[prng.int(0, validSpawns.length - 1)];
@@ -1040,6 +1249,9 @@ export function stepWorld(
             pushTicksLeft: 0,
             pushStepXZ: [0, 0],
             wanderAngle: Math.atan2(-sp[2], -sp[0]),
+            targetLanternId: null,
+            drainTicks: 0,
+            wasDrainingTick: -10,
           });
           emit('shade_spawned', { id });
         }
@@ -1068,20 +1280,28 @@ export function stepWorld(
     }
   }
 
-  // Step 11: Evaluate Victory / Defeat
+  // Step 11: Evaluate Victory / Defeat (Ticket-03 Section 3: [REPLACES] "win immediately when all lanterns lit")
+  // - Out of Flames -> always lose ('no_flames') immediately, even on the final tick.
+  // - When time runs out (timeLeftTicks <= 0, dawn): if litCount >= ceil(0.6 * totalLanterns), win ('dawn_survived'); else lose ('dawn').
   if (p.flames <= 0) {
     world.state = 'lost';
     emit('game_over', { result: 'lost', reason: 'no_flames' });
-  } else if (world.lanterns.length > 0 && world.lanterns.every((l) => l.lit)) {
-    world.state = 'won';
-    const secLeft = Math.floor(world.timeLeftTicks / TICK_RATE);
-    world.score +=
-      secLeft * world.tuning.score.per_second_left +
-      p.flames * world.tuning.score.per_flame_left;
-    emit('game_over', { result: 'won', reason: 'all_lit' });
   } else if (world.timeLeftTicks <= 0) {
-    world.state = 'lost';
-    emit('game_over', { result: 'lost', reason: 'dawn' });
+    const litLanterns = world.lanterns.filter((l) => l.lit);
+    const requiredLit = Math.ceil(world.tuning.win_ratio * world.lanterns.length);
+    if (litLanterns.length >= requiredLit) {
+      world.state = 'won';
+      // Dawn bonus (Ticket-03 Section 5): each lit lantern grants +50 + floor(fuel); each remaining Flame grants +50
+      for (const l of litLanterns) {
+        const fuelFloor = Math.floor(l.fuelUnits / FUEL_UNITS_PER_FUEL);
+        world.score += world.tuning.score.per_lit_at_dawn + fuelFloor;
+      }
+      world.score += p.flames * world.tuning.score.per_flame_left;
+      emit('game_over', { result: 'won', reason: 'dawn_survived' });
+    } else {
+      world.state = 'lost';
+      emit('game_over', { result: 'lost', reason: 'dawn' });
+    }
   }
 
   return tickEvents;
@@ -1089,38 +1309,6 @@ export function stepWorld(
 
 export function buildSnapshot(world: SimWorld): Record<string, unknown> {
   const timeLeftS = round3(world.timeLeftTicks / TICK_RATE);
-
-  if (world.contractVersion === '1.0') {
-    return {
-      type: 'snapshot',
-      tick: world.tick,
-      sim_tick: world.simTick,
-      state: world.state,
-      time_left_s: timeLeftS,
-      score: world.score,
-      player: {
-        pos: roundVec3(world.player.pos),
-        flames: world.player.flames,
-        carried: world.player.carried,
-      },
-      lanterns: world.lanterns.map((l) => ({
-        id: l.id,
-        pos: roundVec3(l.pos),
-        lit: l.lit,
-        deposited: l.deposited,
-      })),
-      shades: world.shades.map((s) => ({
-        id: s.id,
-        pos: roundVec3(s.pos),
-        state: s.state,
-      })),
-      motes_active: world.motes.length,
-      motes: world.motes.map((m) => ({
-        id: m.id,
-        pos: roundVec3(m.pos),
-      })),
-    };
-  }
 
   return {
     type: 'snapshot',
@@ -1139,6 +1327,7 @@ export function buildSnapshot(world: SimWorld): Record<string, unknown> {
       vel: roundVec3(world.player.vel),
       flames: world.player.flames,
       carried: world.player.carried,
+      capacity: world.player.capacity,
       grounded: world.player.grounded,
       invuln: world.player.invulnTicks > 0,
       dash_cd_s: round3(world.player.dashCdTicks / TICK_RATE),
@@ -1150,6 +1339,9 @@ export function buildSnapshot(world: SimWorld): Record<string, unknown> {
       pos: roundVec3(l.pos),
       lit: l.lit,
       deposited: l.deposited,
+      fuel: l.lit ? round1(l.fuelUnits / FUEL_UNITS_PER_FUEL) : 0,
+      ever_lit: l.everLit,
+      relit_count: l.relitCount,
     })),
     shades: world.shades.map((s) => ({
       id: s.id,
@@ -1235,7 +1427,7 @@ export function runContractSimulation(params: {
   snapshotEvery?: number;
   scenario?: ScenarioFile;
   inputs?: InputFile;
-  contractVersion?: '1.0' | '1.1';
+  contractVersion?: '1.0' | '1.1' | '1.2';
 }): { lines: string[]; finalWorld: SimWorld } {
   const snapshotEvery = params.snapshotEvery ?? 10;
   const { world, prng } = createWorld({

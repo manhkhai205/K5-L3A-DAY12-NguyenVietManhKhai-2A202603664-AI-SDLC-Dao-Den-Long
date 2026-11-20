@@ -18,9 +18,9 @@
 - **Cần chỉnh gì ở Harness:** Đã cập nhật `AGENTS.md` và `.agents/skills/verify-phase/SKILL.md` để ghi nhận quy tắc 12 bước trong 1 tick và bộ scenarios của Contract v1.1.
 
 ### Phase 3 (`tag: phase-3`)
-- **Yêu cầu đạt / chưa đạt:** *(Cập nhật cuối Phase 3)*
-- **Xử lý thay đổi yêu cầu & test cũ:** *(Cập nhật cuối Phase 3)*
-- **Cần chỉnh gì ở Harness:** *(Cập nhật cuối Phase 3)*
+- **Yêu cầu đạt / chưa đạt:** Đạt 100% yêu cầu Change Request `TICKET-03` ("Đèn cạn dầu") và `Test Contract v1.2`. Đã triển khai hệ thống nhiên liệu đèn theo đơn vị nguyên `1/60` (`fuelUnits`), châm dầu (`refuel`), tắt đèn khi cạn dầu (`lantern_out`), thắp lại tốn 5 đom đóm (`relight: true`), Bóng Mực hút dầu đèn yếu (`drain`, `fuel_drain`), luật thắng sống sót tới bình minh (`dawn_survived`), sức chứa tăng dần (`10 + 2 * successful_lights`, trần `20`), công thức điểm mới và Chế độ Mù màu (Colorblind Mode + đèn tắt xẹp 20% có vết rách + thanh dầu 3D nhấp nháy 1Hz).
+- **Xử lý thay đổi yêu cầu & test cũ:** Đã viết tài liệu quyết định thiết kế [ADR-001-phase3-lantern-fuel-and-dawn.md](ADR-001-phase3-lantern-fuel-and-dawn.md) và [../../CHANGELOG.md](../../CHANGELOG.md). Bài test Phase 1 (`smoke.json`) bị ảnh hưởng bởi việc bỏ luật thắng sớm `all_lit` và đổi công thức điểm đã được cập nhật kèm chú thích đầy đủ trong `tests/core.test.ts`, kết hợp với 3 scenarios mới (`p3-fuel-relight.json`, `p3-shade-drain.json`, `p3-dawn-win.json`) nâng tổng số test lên 12/12 PASSED.
+- **Cần chỉnh gì ở Harness:** Đã cập nhật `AGENTS.md` để ghi nhận quy tắc tính dầu nguyên `1/60` ở Bước 2 và luật thắng `dawn_survived` ở Bước 11.
 
 ### Phase 4 (`tag: phase-4` / Release `v1.0.0`)
 - **Yêu cầu đạt / chưa đạt & Số đo hiệu năng:** *(Cập nhật cuối Phase 4)*

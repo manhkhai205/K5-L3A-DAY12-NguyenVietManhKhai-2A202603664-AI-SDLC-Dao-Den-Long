@@ -24,7 +24,12 @@ function main() {
 
   const contractRaw = readFileSync(resolve(process.cwd(), 'game.contract.json'), 'utf-8');
   const contract = JSON.parse(contractRaw);
-  const contractVersion: '1.0' | '1.1' = contract.contract_version === '1.1' ? '1.1' : '1.0';
+  const contractVersion: '1.0' | '1.1' | '1.2' =
+    contract.contract_version === '1.2'
+      ? '1.2'
+      : contract.contract_version === '1.1'
+        ? '1.1'
+        : '1.0';
 
   console.log(`[Verify-Phase] Running verification pipeline for Phase ${phase} (Contract v${contractVersion})...`);
 

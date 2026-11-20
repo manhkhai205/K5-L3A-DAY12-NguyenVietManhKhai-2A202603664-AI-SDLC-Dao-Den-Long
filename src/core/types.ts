@@ -3,15 +3,17 @@ export type Vec3Tuple = [number, number, number];
 export interface TuningConfig {
   player_speed: number;
   carry_capacity: number;
+  capacity_max: number;
   lantern_cost: number;
+  relight_cost: number;
   lantern_count_night1: number;
   pickup_radius: number;
   interact_radius: number;
   pulse_cost: number;
   pulse_radius: number;
   night1_duration_s: number;
-  night2_duration_s?: number;
-  night3_duration_s?: number;
+  night2_duration_s: number;
+  night3_duration_s: number;
   flames: number;
   invuln_s: number;
   hit_drop_ratio: number;
@@ -22,13 +24,22 @@ export interface TuningConfig {
   shade_speed: number;
   shade_hit_radius: number;
   fall_enabled: boolean;
-  dash_speed?: number;
-  dash_duration_s?: number;
-  dash_cooldown_s?: number;
+  dash_speed: number;
+  dash_duration_s: number;
+  dash_cooldown_s: number;
+  fuel_max: number;
+  fuel_decay_per_s: number;
+  fuel_per_mote: number;
+  win_ratio: number;
+  drain_per_s: number;
+  low_fuel_threshold: number;
   score: {
     per_mote: number;
     per_lantern: number;
+    per_relight: number;
     per_stun: number;
+    per_drain_stun: number;
+    per_lit_at_dawn: number;
     per_second_left: number;
     per_flame_left: number;
   };
@@ -49,15 +60,17 @@ export interface InputFile {
   frames: InputFrame[];
 }
 
-export type ShadeStateName = 'spawning' | 'wander' | 'chase' | 'recoil' | 'stunned';
+export type ShadeStateName = 'spawning' | 'wander' | 'chase' | 'recoil' | 'stunned' | 'drain';
 export type DrifterStateName = 'idle' | 'chase' | 'flee' | 'removed';
 
 export interface PlayerSim {
   pos: Vec3Tuple;
   vel: Vec3Tuple;
-  facingDir: [number, number]; // normalized XZ
+  facingDir: [number, number];
   flames: number;
   carried: number;
+  capacity: number;
+  successfulLights: number;
   grounded: boolean;
   invulnTicks: number;
   dashCdTicks: number;
@@ -74,7 +87,7 @@ export interface MoteSim {
   id: string;
   pos: Vec3Tuple;
   kind: 'random' | 'dropped';
-  ttlTicks: number | null; // null for random motes
+  ttlTicks: number | null;
   spawnPointIdx?: number;
 }
 
@@ -83,7 +96,11 @@ export interface LanternSim {
   pos: Vec3Tuple;
   lit: boolean;
   deposited: number;
-  justLitTicks: number; // 30 ticks safe zone push window
+  /** Integer 1/60th units: 100 fuel = 6000 units */
+  fuelUnits: number;
+  everLit: boolean;
+  relitCount: number;
+  justLitTicks: number;
 }
 
 export interface ShadeSim {
@@ -94,6 +111,9 @@ export interface ShadeSim {
   pushTicksLeft: number;
   pushStepXZ: [number, number];
   wanderAngle: number;
+  targetLanternId: string | null;
+  drainTicks: number;
+  wasDrainingTick: number;
 }
 
 export interface DrifterSim {
@@ -122,6 +142,7 @@ export interface ScenarioFile {
     dash_cd_ticks?: number;
     pulse_cd_ticks?: number;
     charm_ticks?: number;
+    successful_lights?: number;
   };
   random_motes?: boolean;
   random_shades?: boolean;
@@ -133,12 +154,16 @@ export interface ScenarioFile {
     pos: Vec3Tuple;
     state?: ShadeStateName;
     state_ticks_left?: number;
+    target_lantern_id?: string;
   }>;
   lanterns?: Array<{
     id: string;
     pos?: Vec3Tuple;
     deposited?: number;
     lit?: boolean;
+    fuel?: number;
+    ever_lit?: boolean;
+    relit_count?: number;
   }>;
   drifters?: Array<{
     id?: string;
@@ -166,7 +191,7 @@ export interface SimEvent {
 }
 
 export interface SimWorld {
-  contractVersion: '1.0' | '1.1';
+  contractVersion: '1.0' | '1.1' | '1.2';
   seed: number;
   night: 1 | 2 | 3;
   tick: number;

@@ -1,0 +1,15 @@
+{
+  "player": { "pos": [0, 0, 0], "carried": 7, "flames": 3 },
+  "random_motes": false,
+  "random_shades": false,
+  "random_drifters": false,
+  "motes": [],
+  "shades": [],
+  "drifters": [
+    { "id": "D1", "pos": [1.0, 0, 0], "state": "chase", "stolen": 0 }
+  ],
+  "lanterns": [
+    { "id": "L1", "pos": [0, 0, 20], "deposited": 0 }
+  ],
+  "time_left_s": 330
+}

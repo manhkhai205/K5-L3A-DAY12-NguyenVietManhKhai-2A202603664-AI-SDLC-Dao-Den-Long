@@ -1,10 +1,10 @@
 # Giả Định & Tiêu Chí Nghiệm Thu Qua Các Phase (Assumptions & Acceptance Criteria)
 
-Tài liệu này ghi lại toàn bộ các **giả định cho những chỗ mơ hồ**, **tiêu chí nghiệm thu kiểm chứng được**, và **lý do thay đổi thiết kế/test** từ Checkpoint 0 đến Phase 4.
+Tài liệu này ghi lại toàn bộ các **giả định cho những chỗ mơ hồ**, **tiêu chí nghiệm thu kiểm chứng được (Acceptance Criteria)**, và **lý do thay đổi thiết kế/test** từ Checkpoint 0 đến Phase 4.
 
 ---
 
-## Phase 1 — PRD-0 & Test Contract v1.0
+## Phase 1 — PRD-0 & Test Contract v1.0 (`tag: phase-1`)
 
 ### 1. Yêu cầu Bắt buộc từ PRD-0 & Test Contract v1.0
 - Màn chơi **Đêm 1 – Đảo Bến**: đảo tròn bán kính 40m có 5 Đèn Lồng Lớn (`L1..L5`).
@@ -20,3 +20,25 @@ Tài liệu này ghi lại toàn bộ các **giả định cho những chỗ mơ
 | Máu (Ngọn Lửa), bất tử & rơi đom đóm khi bị chạm | Có `3` Ngọn Lửa, chạm Bóng Mực ở `<= 1.0m` mất 1 máu, rơi `50%` (`floor(carried/2)`) đom đóm, bất tử `1.5s` | `flames: 3`, `shade_hit_radius: 1.0`, `hit_drop_ratio: 0.5`, `invuln_s: 1.5` | Va chạm Bóng Mực khi cầm 7 đom đóm -> còn 2 máu, rơi 3 đom đóm, phát `player_hit`. |
 | Vùng an toàn quanh đèn & tốc độ Bóng Mực | Đèn sáng tạo vùng an toàn `6.0m`; Bóng Mực chạy `4.0 m/s` | `safe_radius: 6.0`, `shade_speed: 4.0` | Bóng Mực không thể đi vào vùng `< 6.0m` của đèn đã thắp sáng. |
 | Công thức tính điểm | `+10`/đom đóm nạp, `+100`/đèn thắp, `+5`/Bóng Mực choáng, khi thắng cộng `+2`/giây còn lại và `+50`/Ngọn Lửa còn lại | `score: { per_mote: 10, per_lantern: 100, per_stun: 5, per_second_left: 2, per_flame_left: 50 }` | Thắp sáng toàn bộ đèn cộng đúng điểm thưởng thời gian và máu vào dòng `end`. |
+
+---
+
+## Phase 2 — TICKET-02 ("Ba hòn đảo") & Test Contract v1.1 (`tag: phase-2`)
+
+### 1. Đồng bộ Số Liệu Chuẩn & Mở rộng Test Contract v1.1
+- Nâng cấp `game.contract.json` lên `"contract_version": "1.1"`, bổ sung đầy đủ các khóa: `dash_speed: 14.0`, `dash_duration_s: 0.2`, `dash_cooldown_s: 1.5`, `night2_duration_s: 330`, `night3_duration_s: 360`.
+- Hỗ trợ `--night 1`, `--night 2` (Đảo Cau), `--night 3` (Đảo Chuông).
+- Mở rộng `snapshot` thêm `night`, `wind: { active, dir_deg }`, `player.{vel, grounded, invuln, dash_cd_s, pulse_cd_s, charm_s}`, và các mảng bắt buộc `motes`, `drifters`, `charms`.
+- Thực thi nghiêm ngặt **thứ tự 12 bước xử lý trong một tick**.
+
+### 2. Tiêu Chí Nghiệm Thu (Acceptance Criteria) cho Toàn Bộ Tính Năng Mới (Phần 3 Ticket-02)
+
+| Tính năng (Phần 3 Ticket-02) | Tiêu chí Nghiệm thu Kiểm chứng được (Acceptance Criteria) | Scenario / Test Kiểm chứng |
+|---|---|---|
+| **1. Kỹ năng Lướt (Dash)** | Khi nhấn `dash: true` (chuyển từ `false -> true`) và `dash_cd_s == 0`, Mây lướt với vận tốc `14.0 m/s` theo hướng di chuyển (hoặc hướng mặt nếu đứng yên) trong `12 ticks` (`0.2s`), giữ nguyên độ cao nếu ở trên không, phát sự kiện `dash {}`, và đặt hồi chiêu `1.5s` (`90 ticks`). | `scenarios/p2-dash-charm.json` & `tests/core.test.ts` |
+| **2. Bùa Gió (Wind Charm `C1`, `C2`)** | Khi Mây đi vào phạm vi `XZ <= 1.0m` và `|dY| <= 1.5m` của Bùa Gió đang `available: true`, nhặt bùa tự động, phát sự kiện `charm_picked { charm_id, charm_ticks: 600 }`. Trong `600 ticks`, tốc độ chạy tăng lên `7.2 m/s` và Lướt không tốn hồi chiêu (`dash_cd_s = 0`). Bùa hồi lại sau `2700 ticks`. | `scenarios/p2-dash-charm.json` & `tests/core.test.ts` |
+| **3. Gió Lạc (Drifters `D1`, `D2`)** | Ở Đêm 2 & 3, Gió Lạc chuyển từ `idle` sang `chase` (`7.0 m/s`) khi Mây mang `>= 5` đom đóm và cách `<= 15m`. Khi chạm (`XZ <= 1.2m`), cướp `min(3, carried)` đom đóm, phát `drifter_steal { drifter_id, amount, carried }` và chuyển sang `flee` trong `240 ticks`. Nếu trúng Tỏa Sáng (`pulse`) khi đang `flee` và có mang đom đóm, thả lại toàn bộ thành đom đóm rơi (`kind: "dropped"`, TTL `480 ticks`), phát `drifter_drop { drifter_id, amount }`. | `scenarios/p2-drifter.json` & `tests/core.test.ts` |
+| **4. Bản đồ Đêm 2 (Đảo Cau) & Bục Nhảy** | Hai đảo bán kính `28m` tại `(0,0,0)` và `(70,0,0)` nối bằng cầu tre `x in [26,44], z in [-2,2]`, 6 đèn `L1..L6`. Khi chạm bục nhảy tại `(20,0,18)` hoặc `(50,0,-18)`, Mây được phóng lên với `velY = 14 m/s` và vận tốc ngang `24 m/s` hướng về tâm đảo kia. | `tests/core.test.ts` (`supports Night 2 jump pad launch`) |
+| **5. Bản đồ Đêm 3 (Đảo Chuông), 3 Tầng & Gió Mạnh** | Đảo bán kính `45m` với 3 tầng (`Y=0`, `Y=3`, `Y=6`), 2 dốc nghiêng ở góc `30°` và `150°`, bục nhảy tại `(0,3,13)` lên tầng 2, tháp chuông bán kính `2m` ở tâm tầng 2, 7 đèn `L1..L7`. Mỗi `30s` (`1800 ticks`) có Gió Mạnh kéo dài `5s` (`300 ticks`) đẩy Mây `2 m/s`. | `tests/core.test.ts` (`Night 3 multi-tier elevation & wind`) |
+| **6. Tạm dừng (Pause `Esc/P`) & Chuỗi 3 Đêm** | Khi nhấn `pause: true`, trạng thái chuyển sang `"paused"`, phát sự kiện `paused {}`; trong khi tạm dừng `tick` vẫn tăng nhưng `sim_tick`, thời gian, hồi chiêu, spawn, TTL đứng yên hoàn toàn. Nhấn lần nữa phát `resumed {}` và tiếp tục. Giao diện hỗ trợ chuyển chuỗi 3 Đêm, lưu cài đặt âm lượng vào `localStorage`. | `scenarios/p2-pause.json` & `tests/core.test.ts` |
+| **7. Hiệu năng Headless (21.600 ticks)** | Chạy headless một Đêm đầy đủ (tối đa `21.600 ticks`) hoàn thành trong `<= 30 giây` (thực tế đạt `< 0.1 giây`). | `tests/core.test.ts` & `docs/proof/phase-2/verification-report.md` |
